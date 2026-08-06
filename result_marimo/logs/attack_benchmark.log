@@ -1,0 +1,201 @@
+[2026-08-06 21:09:12,729] [INFO] [AttackBenchmark]: Subsetting test set to 1000 samples for benchmark evaluation...
+[2026-08-06 21:09:12,730] [INFO] [AttackBenchmark]: Evaluation DataLoader created with batch_size=1024, total_samples=1000
+[2026-08-06 21:09:12,730] [INFO] [AttackBenchmark]: === GROUP C: Non-pixel-K Attacks (FGSM, BIM, PGD, SFA) ===
+[2026-08-06 21:09:16,469] [INFO] [AttackBenchmark]: [Group C] FGSM: ASR=42.84%, Robust Acc=52.8%, Avg L0=1021.04
+[2026-08-06 21:09:17,753] [INFO] [AttackBenchmark]: [Group C] BIM: ASR=97.07%, Robust Acc=3.2%, Avg L0=865.03
+[2026-08-06 21:09:19,853] [INFO] [AttackBenchmark]: [Group C] PGD: ASR=97.72%, Robust Acc=2.2%, Avg L0=1022.82
+[2026-08-06 21:09:22,476] [INFO] [AttackBenchmark]: [Group C] SFA: ASR=93.38%, Robust Acc=7.5%, Avg L0=826.87
+[2026-08-06 21:09:22,479] [INFO] [AttackBenchmark]: === GROUP A: Direct K-Sweep Attacks (Explicit K-budget) ===
+[2026-08-06 21:09:23,189] [INFO] [AttackBenchmark]: [Group A] JSMA (K=1): ASR=3.9%, Robust Acc=88.8%, Avg L0=0.92
+[2026-08-06 21:09:24,039] [INFO] [AttackBenchmark]: [Group A] JSMA (K=2): ASR=5.75%, Robust Acc=87.0%, Avg L0=1.81
+[2026-08-06 21:09:25,343] [INFO] [AttackBenchmark]: [Group A] JSMA (K=4): ASR=10.41%, Robust Acc=82.7%, Avg L0=3.55
+[2026-08-06 21:09:27,453] [INFO] [AttackBenchmark]: [Group A] JSMA (K=8): ASR=16.05%, Robust Acc=77.5%, Avg L0=6.86
+[2026-08-06 21:09:31,006] [INFO] [AttackBenchmark]: [Group A] JSMA (K=16): ASR=23.97%, Robust Acc=70.2%, Avg L0=12.95
+[2026-08-06 21:09:35,079] [INFO] [AttackBenchmark]: [Group A] JSMA (K=32): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:09:39,101] [INFO] [AttackBenchmark]: [Group A] JSMA (K=64): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:09:43,158] [INFO] [AttackBenchmark]: [Group A] JSMA (K=128): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:09:45,109] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=1): ASR=1.41%, Robust Acc=91.0%, Avg L0=0.92
+[2026-08-06 21:09:46,805] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=2): ASR=2.39%, Robust Acc=90.2%, Avg L0=1.84
+[2026-08-06 21:09:48,481] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=4): ASR=3.15%, Robust Acc=90.0%, Avg L0=3.68
+[2026-08-06 21:09:50,164] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=8): ASR=5.75%, Robust Acc=88.0%, Avg L0=7.35
+[2026-08-06 21:09:51,872] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=16): ASR=7.27%, Robust Acc=87.2%, Avg L0=14.63
+[2026-08-06 21:09:53,505] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=32): ASR=12.04%, Robust Acc=82.9%, Avg L0=29.06
+[2026-08-06 21:09:55,191] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=64): ASR=22.02%, Robust Acc=74.1%, Avg L0=57.21
+[2026-08-06 21:09:56,869] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=128): ASR=35.57%, Robust Acc=62.1%, Avg L0=111.26
+[2026-08-06 21:09:57,276] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=1): ASR=5.42%, Robust Acc=87.6%, Avg L0=0.92
+[2026-08-06 21:09:57,860] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=2): ASR=9.65%, Robust Acc=84.1%, Avg L0=1.79
+[2026-08-06 21:09:58,777] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=4): ASR=18.11%, Robust Acc=76.7%, Avg L0=3.38
+[2026-08-06 21:10:00,344] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=8): ASR=25.38%, Robust Acc=70.2%, Avg L0=6.13
+[2026-08-06 21:10:03,212] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=16): ASR=35.03%, Robust Acc=61.5%, Avg L0=10.3
+[2026-08-06 21:10:06,686] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=32): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:10:10,177] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=64): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:10:13,648] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=128): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:10:37,137] [INFO] [AttackBenchmark]: Subsetting test set to 1000 samples for benchmark evaluation...
+[2026-08-06 21:10:37,137] [INFO] [AttackBenchmark]: Evaluation DataLoader created with batch_size=1024, total_samples=1000
+[2026-08-06 21:10:37,138] [INFO] [AttackBenchmark]: === GROUP C: Non-pixel-K Attacks (FGSM, BIM, PGD, SFA) ===
+[2026-08-06 21:10:37,951] [INFO] [AttackBenchmark]: [Group C] FGSM: ASR=42.84%, Robust Acc=52.8%, Avg L0=1021.04
+[2026-08-06 21:10:39,088] [INFO] [AttackBenchmark]: [Group C] BIM: ASR=97.07%, Robust Acc=3.2%, Avg L0=865.03
+[2026-08-06 21:10:41,101] [INFO] [AttackBenchmark]: [Group C] PGD: ASR=97.72%, Robust Acc=2.1%, Avg L0=1022.78
+[2026-08-06 21:10:43,548] [INFO] [AttackBenchmark]: [Group C] SFA: ASR=94.36%, Robust Acc=6.7%, Avg L0=823.6
+[2026-08-06 21:10:43,551] [INFO] [AttackBenchmark]: === GROUP A: Direct K-Sweep Attacks (Explicit K-budget) ===
+[2026-08-06 21:10:44,163] [INFO] [AttackBenchmark]: [Group A] JSMA (K=1): ASR=3.9%, Robust Acc=88.8%, Avg L0=0.92
+[2026-08-06 21:10:44,955] [INFO] [AttackBenchmark]: [Group A] JSMA (K=2): ASR=5.75%, Robust Acc=87.0%, Avg L0=1.81
+[2026-08-06 21:10:46,251] [INFO] [AttackBenchmark]: [Group A] JSMA (K=4): ASR=10.41%, Robust Acc=82.7%, Avg L0=3.55
+[2026-08-06 21:10:48,338] [INFO] [AttackBenchmark]: [Group A] JSMA (K=8): ASR=16.05%, Robust Acc=77.5%, Avg L0=6.86
+[2026-08-06 21:10:51,915] [INFO] [AttackBenchmark]: [Group A] JSMA (K=16): ASR=23.97%, Robust Acc=70.2%, Avg L0=12.95
+[2026-08-06 21:10:55,889] [INFO] [AttackBenchmark]: [Group A] JSMA (K=32): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:10:59,871] [INFO] [AttackBenchmark]: [Group A] JSMA (K=64): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:11:03,877] [INFO] [AttackBenchmark]: [Group A] JSMA (K=128): ASR=28.85%, Robust Acc=66.0%, Avg L0=18.98
+[2026-08-06 21:11:05,806] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=1): ASR=0.98%, Robust Acc=91.5%, Avg L0=0.92
+[2026-08-06 21:11:07,465] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=2): ASR=1.74%, Robust Acc=90.8%, Avg L0=1.84
+[2026-08-06 21:11:09,093] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=4): ASR=1.95%, Robust Acc=91.1%, Avg L0=3.69
+[2026-08-06 21:11:10,725] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=8): ASR=4.12%, Robust Acc=89.4%, Avg L0=7.35
+[2026-08-06 21:11:12,408] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=16): ASR=7.48%, Robust Acc=86.7%, Avg L0=14.64
+[2026-08-06 21:11:14,036] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=32): ASR=12.47%, Robust Acc=82.5%, Avg L0=29.08
+[2026-08-06 21:11:15,716] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=64): ASR=21.58%, Robust Acc=74.5%, Avg L0=57.28
+[2026-08-06 21:11:17,369] [INFO] [AttackBenchmark]: [Group A] OnePixel (K=128): ASR=35.25%, Robust Acc=62.4%, Avg L0=110.98
+[2026-08-06 21:11:17,775] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=1): ASR=5.42%, Robust Acc=87.6%, Avg L0=0.92
+[2026-08-06 21:11:18,358] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=2): ASR=9.65%, Robust Acc=84.1%, Avg L0=1.79
+[2026-08-06 21:11:19,274] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=4): ASR=18.11%, Robust Acc=76.7%, Avg L0=3.38
+[2026-08-06 21:11:20,853] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=8): ASR=25.38%, Robust Acc=70.2%, Avg L0=6.13
+[2026-08-06 21:11:23,714] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=16): ASR=35.03%, Robust Acc=61.5%, Avg L0=10.3
+[2026-08-06 21:11:27,194] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=32): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:11:30,684] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=64): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:11:34,194] [INFO] [AttackBenchmark]: [Group A] CornerSearch (K=128): ASR=39.91%, Robust Acc=57.1%, Avg L0=11.86
+[2026-08-06 21:11:36,636] [INFO] [AttackBenchmark]: [Group A] SAIF (K=1): ASR=13.23%, Robust Acc=80.3%, Avg L0=8.25
+[2026-08-06 21:11:39,077] [INFO] [AttackBenchmark]: [Group A] SAIF (K=2): ASR=19.31%, Robust Acc=75.0%, Avg L0=14.16
+[2026-08-06 21:11:41,515] [INFO] [AttackBenchmark]: [Group A] SAIF (K=4): ASR=29.28%, Robust Acc=66.0%, Avg L0=24.34
+[2026-08-06 21:11:43,958] [INFO] [AttackBenchmark]: [Group A] SAIF (K=8): ASR=54.12%, Robust Acc=43.2%, Avg L0=40.12
+[2026-08-06 21:11:46,399] [INFO] [AttackBenchmark]: [Group A] SAIF (K=16): ASR=74.84%, Robust Acc=24.0%, Avg L0=62.02
+[2026-08-06 21:11:48,839] [INFO] [AttackBenchmark]: [Group A] SAIF (K=32): ASR=88.72%, Robust Acc=11.1%, Avg L0=90.67
+[2026-08-06 21:11:51,281] [INFO] [AttackBenchmark]: [Group A] SAIF (K=64): ASR=94.36%, Robust Acc=5.9%, Avg L0=136.66
+[2026-08-06 21:11:53,725] [INFO] [AttackBenchmark]: [Group A] SAIF (K=128): ASR=97.18%, Robust Acc=3.2%, Avg L0=214.75
+[2026-08-06 21:11:56,165] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=1): ASR=2.71%, Robust Acc=89.8%, Avg L0=1.44
+[2026-08-06 21:11:58,606] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=2): ASR=5.42%, Robust Acc=87.3%, Avg L0=2.8
+[2026-08-06 21:12:01,051] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=4): ASR=9.0%, Robust Acc=84.2%, Avg L0=7.19
+[2026-08-06 21:12:03,493] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=8): ASR=17.35%, Robust Acc=76.7%, Avg L0=14.25
+[2026-08-06 21:12:05,937] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=16): ASR=28.96%, Robust Acc=66.5%, Avg L0=26.04
+[2026-08-06 21:12:08,381] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=32): ASR=48.59%, Robust Acc=48.3%, Avg L0=51.37
+[2026-08-06 21:12:10,825] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=64): ASR=77.66%, Robust Acc=21.3%, Avg L0=137.8
+[2026-08-06 21:12:13,267] [INFO] [AttackBenchmark]: [Group A] PGD0 (K=128): ASR=93.93%, Robust Acc=6.2%, Avg L0=350.56
+[2026-08-06 21:12:15,707] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=1): ASR=2.71%, Robust Acc=89.8%, Avg L0=1.44
+[2026-08-06 21:12:18,148] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=2): ASR=5.42%, Robust Acc=87.3%, Avg L0=2.8
+[2026-08-06 21:12:20,588] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=4): ASR=9.0%, Robust Acc=84.2%, Avg L0=7.19
+[2026-08-06 21:12:23,029] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=8): ASR=17.35%, Robust Acc=76.7%, Avg L0=14.25
+[2026-08-06 21:12:25,473] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=16): ASR=28.96%, Robust Acc=66.5%, Avg L0=26.04
+[2026-08-06 21:12:27,915] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=32): ASR=48.59%, Robust Acc=48.3%, Avg L0=51.37
+[2026-08-06 21:12:30,355] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=64): ASR=77.66%, Robust Acc=21.3%, Avg L0=137.8
+[2026-08-06 21:12:32,796] [INFO] [AttackBenchmark]: [Group A] Sparse-PGD (K=128): ASR=93.93%, Robust Acc=6.2%, Avg L0=350.56
+[2026-08-06 21:12:34,114] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=1): ASR=1.08%, Robust Acc=91.2%, Avg L0=5.67
+[2026-08-06 21:12:35,432] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=2): ASR=1.41%, Robust Acc=90.9%, Avg L0=11.87
+[2026-08-06 21:12:36,752] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=4): ASR=1.95%, Robust Acc=90.4%, Avg L0=24.58
+[2026-08-06 21:12:38,071] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=8): ASR=3.47%, Robust Acc=89.1%, Avg L0=48.42
+[2026-08-06 21:12:39,391] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=16): ASR=4.12%, Robust Acc=88.6%, Avg L0=96.29
+[2026-08-06 21:12:40,710] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=32): ASR=7.38%, Robust Acc=85.7%, Avg L0=173.41
+[2026-08-06 21:12:42,028] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=64): ASR=9.87%, Robust Acc=83.6%, Avg L0=283.57
+[2026-08-06 21:12:43,347] [INFO] [AttackBenchmark]: [Group A] Sparse-RS (K=128): ASR=13.12%, Robust Acc=80.7%, Avg L0=451.85
+[2026-08-06 21:12:45,932] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=1): ASR=1.08%, Robust Acc=91.2%, Avg L0=5.48
+[2026-08-06 21:12:48,605] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=2): ASR=0.98%, Robust Acc=91.3%, Avg L0=5.62
+[2026-08-06 21:12:51,237] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=4): ASR=2.71%, Robust Acc=89.7%, Avg L0=22.89
+[2026-08-06 21:12:53,836] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=8): ASR=2.6%, Robust Acc=89.8%, Avg L0=23.77
+[2026-08-06 21:12:56,488] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=16): ASR=4.66%, Robust Acc=88.0%, Avg L0=90.76
+[2026-08-06 21:12:59,094] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=32): ASR=7.38%, Robust Acc=85.6%, Avg L0=133.91
+[2026-08-06 21:13:01,732] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=64): ASR=13.77%, Robust Acc=80.1%, Avg L0=276.62
+[2026-08-06 21:13:04,265] [INFO] [AttackBenchmark]: [Group A] BruSLe (K=128): ASR=19.2%, Robust Acc=75.0%, Avg L0=373.98
+[2026-08-06 21:13:07,319] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=1): ASR=14.53%, Robust Acc=79.1%, Avg L0=13.66
+[2026-08-06 21:13:09,767] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=2): ASR=21.8%, Robust Acc=72.9%, Avg L0=24.35
+[2026-08-06 21:13:12,211] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=4): ASR=36.01%, Robust Acc=60.0%, Avg L0=41.82
+[2026-08-06 21:13:14,656] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=8): ASR=61.39%, Robust Acc=36.3%, Avg L0=65.52
+[2026-08-06 21:13:17,099] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=16): ASR=81.89%, Robust Acc=17.5%, Avg L0=92.23
+[2026-08-06 21:13:19,543] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=32): ASR=92.08%, Robust Acc=8.0%, Avg L0=123.53
+[2026-08-06 21:13:21,988] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=64): ASR=94.79%, Robust Acc=5.4%, Avg L0=172.91
+[2026-08-06 21:13:24,433] [INFO] [AttackBenchmark]: [Group A] IPFSA (K=128): ASR=97.72%, Robust Acc=2.8%, Avg L0=255.22
+[2026-08-06 21:13:26,894] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=1): ASR=19.31%, Robust Acc=74.5%, Avg L0=11.72
+[2026-08-06 21:13:29,355] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=2): ASR=30.8%, Robust Acc=64.2%, Avg L0=18.72
+[2026-08-06 21:13:31,815] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=4): ASR=51.95%, Robust Acc=44.6%, Avg L0=29.62
+[2026-08-06 21:13:34,277] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=8): ASR=73.32%, Robust Acc=25.0%, Avg L0=43.38
+[2026-08-06 21:13:36,734] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=16): ASR=86.12%, Robust Acc=13.3%, Avg L0=58.64
+[2026-08-06 21:13:39,194] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=32): ASR=94.25%, Robust Acc=5.8%, Avg L0=80.16
+[2026-08-06 21:13:41,653] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=64): ASR=97.07%, Robust Acc=3.2%, Avg L0=116.87
+[2026-08-06 21:13:43,224] [INFO] [AttackBenchmark]: [Group A] GradientGuidance (K=128): ASR=98.48%, Robust Acc=1.9%, Avg L0=180.82
+[2026-08-06 21:13:45,667] [INFO] [AttackBenchmark]: [Group A] CPA (K=1): ASR=13.88%, Robust Acc=79.7%, Avg L0=13.49
+[2026-08-06 21:13:48,113] [INFO] [AttackBenchmark]: [Group A] CPA (K=2): ASR=20.5%, Robust Acc=74.0%, Avg L0=24.24
+[2026-08-06 21:13:50,555] [INFO] [AttackBenchmark]: [Group A] CPA (K=4): ASR=35.03%, Robust Acc=60.9%, Avg L0=41.46
+[2026-08-06 21:13:52,998] [INFO] [AttackBenchmark]: [Group A] CPA (K=8): ASR=58.46%, Robust Acc=39.1%, Avg L0=65.21
+[2026-08-06 21:13:55,439] [INFO] [AttackBenchmark]: [Group A] CPA (K=16): ASR=79.07%, Robust Acc=20.0%, Avg L0=94.55
+[2026-08-06 21:13:57,886] [INFO] [AttackBenchmark]: [Group A] CPA (K=32): ASR=91.32%, Robust Acc=8.6%, Avg L0=125.5
+[2026-08-06 21:14:00,331] [INFO] [AttackBenchmark]: [Group A] CPA (K=64): ASR=94.79%, Robust Acc=5.4%, Avg L0=173.74
+[2026-08-06 21:14:02,778] [INFO] [AttackBenchmark]: [Group A] CPA (K=128): ASR=97.51%, Robust Acc=2.9%, Avg L0=253.5
+[2026-08-06 21:14:05,218] [INFO] [AttackBenchmark]: [Group A] FCSA (K=1): ASR=14.21%, Robust Acc=79.4%, Avg L0=13.49
+[2026-08-06 21:14:07,661] [INFO] [AttackBenchmark]: [Group A] FCSA (K=2): ASR=22.56%, Robust Acc=72.1%, Avg L0=23.93
+[2026-08-06 21:14:10,103] [INFO] [AttackBenchmark]: [Group A] FCSA (K=4): ASR=38.5%, Robust Acc=57.7%, Avg L0=41.69
+[2026-08-06 21:14:12,550] [INFO] [AttackBenchmark]: [Group A] FCSA (K=8): ASR=60.3%, Robust Acc=37.6%, Avg L0=64.18
+[2026-08-06 21:14:14,996] [INFO] [AttackBenchmark]: [Group A] FCSA (K=16): ASR=81.78%, Robust Acc=17.6%, Avg L0=91.32
+[2026-08-06 21:14:17,439] [INFO] [AttackBenchmark]: [Group A] FCSA (K=32): ASR=92.19%, Robust Acc=7.9%, Avg L0=123.02
+[2026-08-06 21:14:19,885] [INFO] [AttackBenchmark]: [Group A] FCSA (K=64): ASR=95.66%, Robust Acc=4.6%, Avg L0=171.59
+[2026-08-06 21:14:22,332] [INFO] [AttackBenchmark]: [Group A] FCSA (K=128): ASR=97.72%, Robust Acc=2.7%, Avg L0=251.07
+[2026-08-06 21:14:24,776] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=1): ASR=1.19%, Robust Acc=91.2%, Avg L0=13.86
+[2026-08-06 21:14:27,218] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=2): ASR=1.19%, Robust Acc=91.3%, Avg L0=24.77
+[2026-08-06 21:14:29,658] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=4): ASR=1.41%, Robust Acc=91.3%, Avg L0=46.36
+[2026-08-06 21:14:32,101] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=8): ASR=1.52%, Robust Acc=91.2%, Avg L0=84.99
+[2026-08-06 21:14:34,541] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=16): ASR=4.77%, Robust Acc=88.3%, Avg L0=152.92
+[2026-08-06 21:14:36,983] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=32): ASR=20.07%, Robust Acc=74.7%, Avg L0=252.4
+[2026-08-06 21:14:39,423] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=64): ASR=53.69%, Robust Acc=43.8%, Avg L0=366.31
+[2026-08-06 21:14:41,860] [INFO] [AttackBenchmark]: [Group A] FMSA-budgeted (K=128): ASR=81.56%, Robust Acc=18.1%, Avg L0=449.08
+[2026-08-06 21:14:44,302] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=1): ASR=14.43%, Robust Acc=79.2%, Avg L0=13.23
+[2026-08-06 21:14:46,745] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=2): ASR=19.74%, Robust Acc=74.7%, Avg L0=23.88
+[2026-08-06 21:14:49,187] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=4): ASR=34.27%, Robust Acc=61.4%, Avg L0=41.29
+[2026-08-06 21:14:51,631] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=8): ASR=51.41%, Robust Acc=45.5%, Avg L0=66.28
+[2026-08-06 21:14:54,072] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=16): ASR=73.97%, Robust Acc=24.7%, Avg L0=95.86
+[2026-08-06 21:14:56,513] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=32): ASR=88.18%, Robust Acc=11.6%, Avg L0=129.76
+[2026-08-06 21:14:58,957] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=64): ASR=94.58%, Robust Acc=5.6%, Avg L0=177.83
+[2026-08-06 21:15:01,402] [INFO] [AttackBenchmark]: [Group A] HSA-budgeted (K=128): ASR=96.85%, Robust Acc=3.6%, Avg L0=254.42
+[2026-08-06 21:15:01,406] [INFO] [AttackBenchmark]: === GROUP B: Minimal Support Optimization (Post-hoc ASR@K Evaluation) ===
+[2026-08-06 21:15:02,528] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=1): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,532] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=2): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,535] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=4): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,539] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=8): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,542] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=16): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,545] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=32): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,548] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=64): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:02,551] [INFO] [AttackBenchmark]: [Group B] SparseFool (K=128): ASR@K=0.0%, Mean L0=297.9
+[2026-08-06 21:15:07,197] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=1): ASR@K=0.0%, Mean L0=82.38
+[2026-08-06 21:15:07,201] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=2): ASR@K=0.0%, Mean L0=82.38
+[2026-08-06 21:15:07,205] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=4): ASR@K=0.0%, Mean L0=82.38
+[2026-08-06 21:15:07,209] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=8): ASR@K=0.0%, Mean L0=82.38
+[2026-08-06 21:15:07,212] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=16): ASR@K=7.27%, Mean L0=82.38
+[2026-08-06 21:15:07,215] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=32): ASR@K=14.64%, Mean L0=82.38
+[2026-08-06 21:15:07,218] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=64): ASR@K=35.14%, Mean L0=82.38
+[2026-08-06 21:15:07,220] [INFO] [AttackBenchmark]: [Group B] SigmaZero (K=128): ASR@K=73.97%, Mean L0=82.38
+[2026-08-06 21:15:11,876] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=1): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,880] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=2): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,884] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=4): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,888] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=8): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,891] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=16): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,894] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=32): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,897] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=64): ASR@K=0.0%, Mean L0=93.46
+[2026-08-06 21:15:11,899] [INFO] [AttackBenchmark]: [Group B] Homotopy (K=128): ASR@K=0.43%, Mean L0=93.46
+[2026-08-06 21:15:16,541] [INFO] [AttackBenchmark]: [Group B] GSE (K=1): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,547] [INFO] [AttackBenchmark]: [Group B] GSE (K=2): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,552] [INFO] [AttackBenchmark]: [Group B] GSE (K=4): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,556] [INFO] [AttackBenchmark]: [Group B] GSE (K=8): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,559] [INFO] [AttackBenchmark]: [Group B] GSE (K=16): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,563] [INFO] [AttackBenchmark]: [Group B] GSE (K=32): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,567] [INFO] [AttackBenchmark]: [Group B] GSE (K=64): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:16,570] [INFO] [AttackBenchmark]: [Group B] GSE (K=128): ASR@K=0.0%, Mean L0=395.1
+[2026-08-06 21:15:18,951] [INFO] [AttackBenchmark]: [Group B] Pixle (K=1): ASR@K=0.54%, Mean L0=76.99
+[2026-08-06 21:15:18,956] [INFO] [AttackBenchmark]: [Group B] Pixle (K=2): ASR@K=0.54%, Mean L0=76.99
+[2026-08-06 21:15:18,960] [INFO] [AttackBenchmark]: [Group B] Pixle (K=4): ASR@K=0.54%, Mean L0=76.99
+[2026-08-06 21:15:18,964] [INFO] [AttackBenchmark]: [Group B] Pixle (K=8): ASR@K=0.54%, Mean L0=76.99
+[2026-08-06 21:15:18,968] [INFO] [AttackBenchmark]: [Group B] Pixle (K=16): ASR@K=0.54%, Mean L0=76.99
+[2026-08-06 21:15:18,971] [INFO] [AttackBenchmark]: [Group B] Pixle (K=32): ASR@K=9.33%, Mean L0=76.99
+[2026-08-06 21:15:18,973] [INFO] [AttackBenchmark]: [Group B] Pixle (K=64): ASR@K=28.42%, Mean L0=76.99
+[2026-08-06 21:15:18,976] [INFO] [AttackBenchmark]: [Group B] Pixle (K=128): ASR@K=56.29%, Mean L0=76.99
+[2026-08-06 21:15:21,418] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=1): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,423] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=2): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,428] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=4): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,432] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=8): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,436] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=16): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,440] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=32): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,443] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=64): ASR@K=0.0%, Mean L0=544.59
+[2026-08-06 21:15:21,447] [INFO] [AttackBenchmark]: [Group B] FMSA-minimal-support (K=128): ASR@K=0.0%, Mean L0=544.59

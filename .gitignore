@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large model weights / checkpoints
+*.pth
+*.pt
+*.onnx
+*.bin
+resnet18_cifar10_best.pth
+
+# Environment & IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Virtual Environment
+venv/
+.venv/
+env/

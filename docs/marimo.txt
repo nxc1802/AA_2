@@ -1,0 +1,9 @@
+Use the /marimo-pair skill to pair-program on a running marimo notebook.
+
+Connect to the notebook at: https://sb-f0e5f54d115c5180.sb.molab.run/
+
+Use `execute-code.sh --url https://sb-f0e5f54d115c5180.sb.molab.run/` from the marimo-pair skill to execute code in the notebook.
+
+Use this auth token when calling `execute-code.sh`: `execute-code.sh --url https://sb-f0e5f54d115c5180.sb.molab.run/ --token 844a46458886be6e2000adf8ffe2bfa17794c2f454874e27b6725650166099d7`.
+
+Once you are connected, send a fun toast (mo.status.toast(...)) to the user inside marimo letting them know you're ready to pair.

@@ -34,6 +34,16 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+def safe_json_dump(data_dict, file_path):
+    """Safely dumps Python dict/list to JSON replacing NaNs with None."""
+    if isinstance(data_dict, list):
+        df_temp = pd.DataFrame(data_dict)
+        clean_dict = df_temp.where(pd.notnull(df_temp), None).to_dict(orient="records")
+    else:
+        clean_dict = data_dict
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(clean_dict, f, indent=4)
+
 # ==============================================================================
 # PIVOT TABLES & REPORT GENERATION IMPLEMENTATION
 # ==============================================================================
@@ -51,25 +61,21 @@ def generate_reports(df):
 
         asr_pivot = df_sparse.pivot(index=idx_cols, columns="K", values="ASR (%)").reset_index()
         asr_pivot.to_csv(os.path.join(METRICS_DIR, "asr_k_pivot.csv"), index=False)
-        with open(os.path.join(METRICS_DIR, "asr_k_pivot.json"), "w", encoding="utf-8") as f:
-            json.dump(asr_pivot.to_dict(orient="records"), f, indent=4)
+        safe_json_dump(asr_pivot.to_dict(orient="records"), os.path.join(METRICS_DIR, "asr_k_pivot.json"))
 
         rob_pivot = df_sparse.pivot(index=idx_cols, columns="K", values="Robust Acc (%)").reset_index()
         rob_pivot.to_csv(os.path.join(METRICS_DIR, "robust_accuracy_k_pivot.csv"), index=False)
-        with open(os.path.join(METRICS_DIR, "robust_accuracy_k_pivot.json"), "w", encoding="utf-8") as f:
-            json.dump(rob_pivot.to_dict(orient="records"), f, indent=4)
+        safe_json_dump(rob_pivot.to_dict(orient="records"), os.path.join(METRICS_DIR, "robust_accuracy_k_pivot.json"))
 
         iter_pivot = df_sparse.pivot(index=idx_cols, columns="K", values="Avg Iterations").reset_index()
         iter_pivot.to_csv(os.path.join(METRICS_DIR, "iterations_k_pivot.csv"), index=False)
-        with open(os.path.join(METRICS_DIR, "iterations_k_pivot.json"), "w", encoding="utf-8") as f:
-            json.dump(iter_pivot.to_dict(orient="records"), f, indent=4)
+        safe_json_dump(iter_pivot.to_dict(orient="records"), os.path.join(METRICS_DIR, "iterations_k_pivot.json"))
 
     cols = ["Group", "Attack Method", "K", "PSNR (dB)", "SSIM", "LPIPS", "Avg L0", "Avg L2", "Avg L_inf", "Avg Iterations"]
     cols = [c for c in cols if c in df.columns]
     img_quality = df[cols].copy()
     img_quality.to_csv(os.path.join(METRICS_DIR, "image_quality_metrics.csv"), index=False)
-    with open(os.path.join(METRICS_DIR, "image_quality_metrics.json"), "w", encoding="utf-8") as f:
-        json.dump(img_quality.to_dict(orient="records"), f, indent=4)
+    safe_json_dump(img_quality.to_dict(orient="records"), os.path.join(METRICS_DIR, "image_quality_metrics.json"))
 
     logger.info("=== SUMMARY PIVOT TABLES GENERATED ===")
     return compile_attack_report()

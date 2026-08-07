@@ -104,9 +104,11 @@ def _(
     model,
     mo,
     run_attack_benchmark_suite,
+    run_button,
     test_loader,
     train_clean_resnet18,
 ):
+    mo.stop(not run_button.value, mo.md("Click **Run Benchmark Suite** above to start evaluation."))
     mo.status.toast(title="Running Benchmark", description="⏳ Starting CIFAR-10 Sparse Attack Benchmark...", kind="info")
     if model is not None:
         eval_model = model
@@ -124,8 +126,6 @@ def _(
 
     benchmark_display
     return benchmark_display, eval_model, te_loader
-
-
 
 
 if __name__ == "__main__":

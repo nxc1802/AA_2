@@ -1,0 +1,39 @@
+import os
+import torch
+import torch.nn as nn
+from src.attacks.adapters.utils import scoped_sys_path
+from src.core.utils import prepare_model_for_eval
+
+THIRD_PARTY_SIA = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../third_party/sparse_imperceivable_attacks"))
+
+class CornerSearchOfficialAdapter:
+    """
+    Adapter wrapping official author implementation of CornerSearch (fra31/sparse-imperceivable-attacks, ICCV 2019).
+    """
+    def __init__(self, model: nn.Module, k: int = 15, max_pixels: int = None, max_iter: int = 1000, device: torch.device = None):
+        self.model = prepare_model_for_eval(model, device)
+        self.k = max_pixels if max_pixels is not None else k
+        self.max_iter = max_iter
+        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        with scoped_sys_path(THIRD_PARTY_SIA):
+            from cornersearch_attacks_pt import CSattack
+
+            args = {
+                'type_attack': 'L0',
+                'n_iter': self.max_iter,
+                'n_max': 100,
+                'epsilon': 0.0,
+                'kappa': 0.0,
+                'sparsity': self.k,
+                'size_incr': 1
+            }
+            official_attacker = CSattack(self.model, args)
+
+            x_np = x.detach().cpu().permute(0, 2, 3, 1).numpy()
+            y_np = y.detach().cpu().numpy()
+
+            adv_np, _, _ = official_attacker.perturb(x_np, y_np)
+            adv_tensor = torch.from_numpy(adv_np).permute(0, 3, 1, 2).to(self.device).float()
+            return adv_tensor

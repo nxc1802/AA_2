@@ -10,26 +10,27 @@ import torch.nn as nn
 import pandas as pd
 from tqdm import tqdm
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from datasets.dataset_loader import get_sample_batch
-from models.model_factory import get_model
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from src.datasets.dataset_loader import get_sample_batch
+from src.models.model_factory import get_model, find_existing_checkpoint
+from src.core.utils import prepare_model_for_eval
 
 # Defenses
-from defenses.preprocessing.gaussian_blur import GaussianBlurDefense
-from defenses.preprocessing.median_filter import MedianFilterDefense
-from defenses.preprocessing.jpeg_compression import JPEGCompressionDefense
-from defenses.preprocessing.tvm import TotalVariationMinimizationDefense
+from src.defenses.preprocessing.gaussian_blur import GaussianBlurDefense
+from src.defenses.preprocessing.median_filter import MedianFilterDefense
+from src.defenses.preprocessing.jpeg_compression import JPEGCompressionDefense
+from src.defenses.preprocessing.tvm import TotalVariationMinimizationDefense
 
 # Benchmark Attacks
-from attacks.baselines.pgd import PGDAttack
-from attacks.classical.jsma import JSMAAttack
-from attacks.optimization.pgd0 import PGD0Attack
+from src.attacks.baselines.pgd import PGDAttack
+from src.attacks.classical.jsma import JSMAAttack
+from src.attacks.optimization.pgd0 import PGD0Attack
 
 # ==============================================================================
-# CONFIGURABLE PARAMETERS & PATHS (GPU 96GB VRAM OPTIMIZED)
+# CONFIGURABLE PARAMETERS & PATHS
 # ==============================================================================
-NUM_SAMPLES = 500
-BATCH_SIZE = 128
+NUM_SAMPLES = 50
+BATCH_SIZE = 64
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 RESULT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../result"))
 METRICS_DIR = os.path.join(RESULT_DIR, "metrics")
@@ -58,6 +59,8 @@ logger.addHandler(console_handler)
 # ==============================================================================
 def evaluate_defenses(model, loader, device=DEVICE):
     """Evaluates defense recovery rates against representative dense and sparse attacks."""
+    model = prepare_model_for_eval(model, device)
+
     defenses = {
         "Gaussian Blur": GaussianBlurDefense(kernel_size=3, sigma=1.0),
         "Median Filter": MedianFilterDefense(kernel_size=3),
@@ -67,7 +70,7 @@ def evaluate_defenses(model, loader, device=DEVICE):
 
     test_attacks = {
         "PGD (Dense)": PGDAttack(model, steps=10, device=device),
-        "JSMA (Classical Sparse)": JSMAAttack(model, max_pixels=15, device=device),
+        "JSMA (Classical Sparse)": JSMAAttack(model, k=15, device=device),
         "PGD0 (Opt Sparse)": PGD0Attack(model, k=15, steps=15, device=device),
     }
 
@@ -112,8 +115,14 @@ def evaluate_defenses(model, loader, device=DEVICE):
 
 if __name__ == "__main__":
     logger.info("=== Running High-Performance Defense Benchmark ===")
+    num_samples = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else NUM_SAMPLES
+    
     model = get_model("resnet18", pretrained=False)
-    loader = get_sample_batch(batch_size=BATCH_SIZE, num_samples=NUM_SAMPLES)
+    ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
+    if ckpt:
+        model = get_model(checkpoint_path=ckpt, device=DEVICE)
+        
+    loader = get_sample_batch(batch_size=BATCH_SIZE, num_samples=num_samples)
 
     df_results = evaluate_defenses(model, loader, device=DEVICE)
 

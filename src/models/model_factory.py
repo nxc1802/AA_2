@@ -15,6 +15,7 @@ from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_We
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from huggingface_hub import HfApi, hf_hub_download
+from src.datasets.dataset_loader import HFDatasetWrapper
 
 HF_REPO_ID = "Cuong2004/AA"
 HF_TOKEN = os.getenv("HF_TOKEN", None)
@@ -186,8 +187,15 @@ def train_clean_resnet18(train_loader, val_loader, test_loader, epochs=200, batc
         return model
 
     logger.info("--- Caching Training Set into VRAM for Ultra-Fast Training ---")
-    train_subset = train_loader.dataset
-    cache_loader = DataLoader(train_subset, batch_size=4096, shuffle=False, num_workers=0)
+    # Wrap underlying dataset without random augmentation for initial VRAM caching
+    if hasattr(train_loader.dataset, "dataset") and hasattr(train_loader.dataset, "indices"):
+        orig_ds = train_loader.dataset.dataset.hf_ds
+        raw_wrapper = HFDatasetWrapper(orig_ds, transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()]))
+        raw_subset = Subset(raw_wrapper, train_loader.dataset.indices)
+        cache_loader = DataLoader(raw_subset, batch_size=4096, shuffle=False, num_workers=0)
+    else:
+        cache_loader = DataLoader(train_loader.dataset, batch_size=4096, shuffle=False, num_workers=0)
+    
     cached_x, cached_y = [], []
     for bx, by in cache_loader:
         cached_x.append(bx)

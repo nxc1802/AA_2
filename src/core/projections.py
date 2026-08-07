@@ -36,7 +36,9 @@ def exact_spatial_topk_mask(score: torch.Tensor, k: int) -> torch.Tensor:
         
     B, H, W = score_spatial.shape
     num_pixels = H * W
-    k_bounded = min(max(1, k), num_pixels)
+    if k <= 0:
+        return torch.zeros((B, 1, H, W), dtype=torch.bool, device=score.device)
+    k_bounded = min(k, num_pixels)
     
     flat_score = score_spatial.flatten(1) # (B, H*W)
     indices = flat_score.topk(k_bounded, dim=1).indices # (B, k)

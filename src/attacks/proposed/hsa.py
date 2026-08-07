@@ -7,8 +7,11 @@ from src.core.utils import prepare_model_for_eval
 class HypergraphSparseAttack:
     """
     Hypergraph Sparse Attack (HSA).
-    Constructs a hypergraph structure (Nodes = pixels, Hyperedges = multi-scale spatial receptive fields).
-    Performs minimum coalition search to break maximum hyperedges while strictly projecting perturbation to K-sparse L0 ball.
+    Constructs a spatial hypergraph structure:
+      - Nodes: Spatial pixels (H x W)
+      - Hyperedges: Multi-scale receptive fields (3x3, 5x5, 7x7)
+    Selects top node centrality scores to break maximum hyperedges while strictly
+    projecting perturbation onto exact K-sparse L0 ball.
     """
     def __init__(self, model: nn.Module, budget: int = 15, steps: int = 25, alpha: float = 4/255.0, device: torch.device = None):
         self.model = prepare_model_for_eval(model, device)
@@ -30,11 +33,12 @@ class HypergraphSparseAttack:
         grad = images.grad.data
         grad_mag = grad.abs().sum(dim=1, keepdim=True) # (B, 1, H, W)
 
-        # Multi-scale spatial receptive field hyperedge pooling
-        hyperedge_pool1 = F.avg_pool2d(grad_mag, kernel_size=3, stride=1, padding=1)
-        hyperedge_pool2 = F.avg_pool2d(grad_mag, kernel_size=5, stride=1, padding=2)
+        # Multi-scale spatial receptive field hyperedge pooling (3x3, 5x5, 7x7)
+        h_pool3 = F.avg_pool2d(grad_mag, kernel_size=3, stride=1, padding=1)
+        h_pool5 = F.avg_pool2d(grad_mag, kernel_size=5, stride=1, padding=2)
+        h_pool7 = F.avg_pool2d(grad_mag, kernel_size=7, stride=1, padding=3)
 
-        node_centrality = grad_mag + hyperedge_pool1 + hyperedge_pool2
+        node_centrality = grad_mag + 0.5 * h_pool3 + 0.3 * h_pool5 + 0.2 * h_pool7
         return node_centrality, grad
 
     def attack(self, images: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:

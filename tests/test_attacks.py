@@ -7,6 +7,7 @@ from src.core import (
     project_l0,
     compute_per_sample_psnr,
     compute_per_sample_ssim,
+    compute_distortion_metrics,
     prepare_model_for_eval,
     set_seed
 )
@@ -21,6 +22,11 @@ from src.attacks.proposed.cpa import CooperativePixelsAttack
 from src.attacks.proposed.fcsa import FunctionalCoalitionSparseAttack
 from src.attacks.proposed.fmsa import FeatureToMinimalSupportAttack
 from src.attacks.proposed.hsa import HypergraphSparseAttack
+
+from src.defenses.preprocessing.gaussian_blur import GaussianBlurDefense
+from src.defenses.preprocessing.median_filter import MedianFilterDefense
+from src.defenses.preprocessing.jpeg_compression import JPEGCompressionDefense
+from src.defenses.preprocessing.tvm import TotalVariationMinimizationDefense
 
 class DummyModel(nn.Module):
     def __init__(self):
@@ -44,6 +50,12 @@ class TestAttacks(unittest.TestCase):
         self.assertEqual(mask.dtype, torch.bool)
         counts = mask.flatten(1).sum(dim=1)
         self.assertTrue((counts == k).all().item())
+
+    def test_exact_spatial_topk_mask_k0(self):
+        scores = torch.rand(2, 1, 16, 16)
+        mask = exact_spatial_topk_mask(scores, 0)
+        self.assertEqual(mask.shape, (2, 1, 16, 16))
+        self.assertEqual(mask.sum().item(), 0)
 
     def test_project_l0(self):
         delta = torch.randn(4, 3, 32, 32)
@@ -113,7 +125,7 @@ class TestAttacks(unittest.TestCase):
         attacker = PixleAttack(model, k=k, steps=5)
         x_adv = attacker.attack(x, y)
         l0 = compute_spatial_l0(x_adv - x)
-        self.assertTrue((l0 <= 2 * k).all().item()) # Each swap modifies at most 2 spatial locations
+        self.assertTrue((l0 <= 2 * k).all().item())
 
     def test_proposed_methods_budget(self):
         set_seed(42)
@@ -141,6 +153,31 @@ class TestAttacks(unittest.TestCase):
         self.assertEqual(psnr.shape, torch.Size([2]))
         self.assertEqual(ssim.shape, torch.Size([2]))
         self.assertTrue(((ssim >= 0.0) & (ssim <= 1.0)).all().item())
+
+    def test_distortion_metrics_success_conditioned(self):
+        l0 = torch.tensor([10.0, 0.0, 5.0])
+        l2 = torch.tensor([1.2, 0.0, 0.8])
+        linf = torch.tensor([0.3, 0.0, 0.2])
+        psnr = torch.tensor([30.0, 100.0, 35.0])
+        ssim = torch.tensor([0.9, 1.0, 0.95])
+        succ_mask = torch.tensor([True, False, True])
+        
+        res = compute_distortion_metrics(l0, l2, linf, psnr, ssim, None, succ_mask)
+        self.assertEqual(res["succ_count"], 2)
+        self.assertEqual(res["succ_l0_mean"], 7.5)
+        self.assertEqual(res["succ_psnr_mean"], 32.5)
+
+    def test_defenses_execution(self):
+        x = torch.rand(2, 3, 32, 32)
+        g_blur = GaussianBlurDefense()
+        m_filt = MedianFilterDefense()
+        jpeg = JPEGCompressionDefense()
+        tvm = TotalVariationMinimizationDefense(steps=2)
+
+        for d in [g_blur, m_filt, jpeg, tvm]:
+            out = d.defend(x)
+            self.assertEqual(out.shape, x.shape)
+            self.assertTrue((out >= 0.0).all().item() and (out <= 1.0).all().item())
 
 if __name__ == "__main__":
     unittest.main()

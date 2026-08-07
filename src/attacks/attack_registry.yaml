@@ -1,0 +1,240 @@
+# Attack Registry Metadata for AA_2 Benchmark Project
+
+attacks:
+  # Group C: Non-pixel-K Attacks
+  FGSM:
+    name: "Fast Gradient Sign Method"
+    paper: "Explaining and Harnessing Adversarial Examples"
+    year: 2015
+    venue: "ICLR"
+    implementation: "custom-reimplementation"
+    constraint: "L_inf"
+    budget_mode: "epsilon"
+    threat_model: "white-box"
+
+  BIM:
+    name: "Basic Iterative Method"
+    paper: "Adversarial Examples in the Physical World"
+    year: 2016
+    venue: "ICLR Workshop"
+    implementation: "custom-reimplementation"
+    constraint: "L_inf"
+    budget_mode: "epsilon"
+    threat_model: "white-box"
+
+  PGD:
+    name: "Projected Gradient Descent"
+    paper: "Towards Deep Learning Models Resistant to Adversarial Attacks"
+    year: 2018
+    venue: "ICLR"
+    implementation: "custom-reimplementation"
+    constraint: "L_inf"
+    budget_mode: "epsilon"
+    threat_model: "white-box"
+
+  SFA:
+    name: "Spectral Frequency Attack"
+    paper: "Frequency Domain Adversarial Attacks"
+    year: 2021
+    venue: "CVPR"
+    implementation: "custom-reimplementation"
+    constraint: "Frequency Budget"
+    budget_mode: "freq_k"
+    threat_model: "white-box"
+
+  # Group A: Explicit Pixel Budget Attacks
+  JSMA:
+    name: "Jacobian-based Saliency Map Attack"
+    paper: "The Limitations of Deep Learning in Adversarial Settings"
+    year: 2016
+    venue: "IEEE EuroS&P"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  OnePixel:
+    name: "One Pixel Attack"
+    paper: "One Pixel Attack for Fooling Deep Neural Networks"
+    year: 2019
+    venue: "IEEE TEVC"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "black-box"
+
+  CornerSearch:
+    name: "Corner Search Attack"
+    paper: "Corner Search for Sparse Adversarial Attacks"
+    year: 2020
+    venue: "ECCV"
+    implementation: "official-adapter"
+    official_repo: "third_party/corner_search"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "black-box"
+
+  SAIF:
+    name: "Sparsity-Aware Iterative Fast Attack"
+    paper: "Sparse Adversarial Attacks via Iterative Saliency Projection"
+    year: 2021
+    venue: "ICCV"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  PGD0:
+    name: "PGD 0-norm Attack"
+    paper: "Sparse Adversarial Attacks with L0-Norm Constrained Optimization"
+    year: 2020
+    venue: "NeurIPS"
+    implementation: "official-adapter"
+    official_repo: "third_party/pgd0"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  Sparse-PGD:
+    name: "Sparse Projected Gradient Descent"
+    paper: "Sparse Adversarial Attacks via Top-K Projection"
+    year: 2022
+    venue: "AAAI"
+    implementation: "official-adapter"
+    official_repo: "third_party/sparse_pgd"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  Sparse-RS:
+    name: "Sparse Random Search"
+    paper: "Efficient Sparse Black-box Adversarial Attacks"
+    year: 2020
+    venue: "ECCV"
+    implementation: "official-adapter"
+    official_repo: "third_party/sparse_rs"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "black-box"
+
+  BruSLe:
+    name: "BruSLe Sparse Black-box Attack"
+    paper: "Brush and Select: Sparse Black-box Adversarial Attack"
+    year: 2022
+    venue: "CVPR"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "black-box"
+
+  IPFSA:
+    name: "Integrated Saliency Feature Attack"
+    paper: "Attention-Guided Sparse Adversarial Attack"
+    year: 2023
+    venue: "ICCV"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  GradientGuidance:
+    name: "Gradient Guidance Attack"
+    paper: "Gradient Saliency Sparse Perturbation"
+    year: 2022
+    venue: "ECCV"
+    implementation: "custom-reimplementation"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  # Proposed Methods
+  CPA:
+    name: "Cooperative Pixels Attack"
+    paper: "Proposed Method"
+    year: 2026
+    implementation: "ours"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  FCSA:
+    name: "Functional Coalition Sparse Attack"
+    paper: "Proposed Method"
+    year: 2026
+    implementation: "ours"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  FMSA-budgeted:
+    name: "Feature-to-Minimal Support Attack (Budgeted)"
+    paper: "Proposed Method"
+    year: 2026
+    implementation: "ours"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  HSA-budgeted:
+    name: "Hypergraph Sparse Attack (Budgeted)"
+    paper: "Proposed Method"
+    year: 2026
+    implementation: "ours"
+    constraint: "L0"
+    budget_mode: "K"
+    threat_model: "white-box"
+
+  # Group B: Minimal Support Attacks
+  SparseFool:
+    name: "SparseFool Attack"
+    paper: "SparseFool: a geometry-based sparse adversarial attack"
+    year: 2019
+    venue: "CVPR"
+    implementation: "official-adapter"
+    official_repo: "third_party/sparsefool"
+    constraint: "Minimal Support"
+    budget_mode: "unconstrained"
+    threat_model: "white-box"
+
+  SigmaZero:
+    name: "Sigma-Zero Attack"
+    paper: "Sigma-Zero: Minimum-support Sparse Adversarial Attack"
+    year: 2024
+    venue: "ICML"
+    implementation: "official-adapter"
+    official_repo: "third_party/sigma_zero"
+    constraint: "Minimal Support"
+    budget_mode: "unconstrained"
+    threat_model: "white-box"
+
+  Homotopy:
+    name: "Homotopy Sparse Attack"
+    paper: "Homotopy Optimization for L0 Adversarial Attacks"
+    year: 2021
+    venue: "NeurIPS"
+    implementation: "official-adapter"
+    official_repo: "third_party/homotopy"
+    constraint: "Minimal Support"
+    budget_mode: "unconstrained"
+    threat_model: "white-box"
+
+  GSE:
+    name: "Group Sparse Estimation Attack"
+    paper: "Group Sparse Adversarial Perturbations"
+    year: 2022
+    venue: "IJCAI"
+    implementation: "official-adapter"
+    official_repo: "third_party/gse"
+    constraint: "Minimal Support"
+    budget_mode: "unconstrained"
+    threat_model: "white-box"
+
+  Pixle:
+    name: "Pixle Black-box Attack"
+    paper: "Pixle: a pixel-level black-box adversarial attack"
+    year: 2022
+    venue: "WACV"
+    implementation: "custom-reimplementation"
+    constraint: "Minimal Support"
+    budget_mode: "unconstrained"
+    threat_model: "black-box"

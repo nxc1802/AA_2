@@ -95,3 +95,63 @@ def compute_per_sample_lpips(
         adv_norm = adv * 2.0 - 1.0
         dist = lpips_fn(orig_norm, adv_norm) # (B, 1, 1, 1)
         return dist.view(-1)
+
+
+def compute_distortion_metrics(
+    l0_per: torch.Tensor,
+    l2_per: torch.Tensor,
+    linf_per: torch.Tensor,
+    psnr_per: torch.Tensor,
+    ssim_per: torch.Tensor,
+    lpips_per: Optional[torch.Tensor],
+    success_mask: torch.Tensor
+) -> Dict[str, Any]:
+    """
+    Computes both all-sample averages and success-conditioned distortion metrics.
+    
+    Args:
+        l0_per, l2_per, linf_per, psnr_per, ssim_per: Tensors per sample
+        lpips_per: Optional Tensor per sample
+        success_mask: Boolean tensor indicating adversarial success (clean correct & adv wrong)
+    Returns:
+        Dict with all-sample and success-only mean/median metrics.
+    """
+    total_count = l0_per.numel()
+    succ_count = success_mask.sum().item()
+    
+    metrics = {
+        "all_l0_mean": l0_per.float().mean().item() if total_count > 0 else 0.0,
+        "all_l2_mean": l2_per.float().mean().item() if total_count > 0 else 0.0,
+        "all_linf_mean": linf_per.float().mean().item() if total_count > 0 else 0.0,
+        "succ_count": succ_count,
+        "total_count": total_count,
+    }
+    
+    if succ_count > 0:
+        succ_l0 = l0_per[success_mask].float()
+        succ_l2 = l2_per[success_mask].float()
+        succ_linf = linf_per[success_mask].float()
+        succ_psnr = psnr_per[success_mask].float()
+        succ_ssim = ssim_per[success_mask].float()
+        
+        metrics["succ_l0_mean"] = succ_l0.mean().item()
+        metrics["succ_l0_median"] = succ_l0.median().item()
+        metrics["succ_l2_mean"] = succ_l2.mean().item()
+        metrics["succ_linf_mean"] = succ_linf.mean().item()
+        metrics["succ_psnr_mean"] = succ_psnr.mean().item()
+        metrics["succ_ssim_mean"] = succ_ssim.mean().item()
+        if lpips_per is not None:
+            metrics["succ_lpips_mean"] = lpips_per[success_mask].mean().item()
+        else:
+            metrics["succ_lpips_mean"] = None
+    else:
+        metrics["succ_l0_mean"] = 0.0
+        metrics["succ_l0_median"] = 0.0
+        metrics["succ_l2_mean"] = 0.0
+        metrics["succ_linf_mean"] = 0.0
+        metrics["succ_psnr_mean"] = 0.0
+        metrics["succ_ssim_mean"] = 0.0
+        metrics["succ_lpips_mean"] = None
+
+    return metrics
+

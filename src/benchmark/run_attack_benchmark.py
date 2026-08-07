@@ -7,6 +7,7 @@ import time
 import math
 import json
 import logging
+import hashlib
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
@@ -23,6 +24,7 @@ from src.core import (
     compute_per_sample_psnr,
     compute_per_sample_ssim,
     compute_per_sample_lpips,
+    compute_distortion_metrics,
     prepare_model_for_eval,
     set_seed
 )
@@ -105,17 +107,37 @@ logger.addHandler(console_handler)
 # ==============================================================================
 # EXPERIMENTAL BENCHMARK ENGINE (GROUPS A, B, C)
 # ==============================================================================
-def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SIZE, num_samples=NUM_BENCHMARK_TEST_SAMPLES, device=DEVICE, seed=42, use_official_adapters=False):
+def run_attack_benchmark_suite(
+    model, 
+    test_loader, 
+    eval_batch_size=EVAL_BATCH_SIZE, 
+    num_samples=NUM_BENCHMARK_TEST_SAMPLES, 
+    device=DEVICE, 
+    seed=42, 
+    use_official_adapters=False,
+    output_prefix="benchmark"
+):
     set_seed(seed)
     model = prepare_model_for_eval(model, device)
 
     test_ds = test_loader.dataset
-    if num_samples and num_samples < len(test_ds):
-        logger.info(f"Subsetting test set to {num_samples} samples for benchmark evaluation...")
-        test_ds = Subset(test_ds, range(num_samples))
+    total_ds_len = len(test_ds)
+    n_eval = min(num_samples, total_ds_len) if num_samples else total_ds_len
 
-    eval_loader = DataLoader(test_ds, batch_size=eval_batch_size, shuffle=False, num_workers=0)
-    logger.info(f"Evaluation DataLoader created with batch_size={eval_batch_size}, total_samples={len(test_ds)}")
+    # Fixed Stratified / Deterministic Sample Indexing
+    indices_file = os.path.join(RESULT_DIR, f"benchmark_indices_seed{seed}.json")
+    if os.path.exists(indices_file):
+        with open(indices_file, "r") as f:
+            sampled_indices = json.load(f)[:n_eval]
+    else:
+        g = torch.Generator().manual_seed(seed)
+        sampled_indices = torch.randperm(total_ds_len, generator=g).tolist()[:n_eval]
+        with open(indices_file, "w") as f:
+            json.dump(sampled_indices, f)
+
+    test_subset = Subset(test_ds, sampled_indices)
+    eval_loader = DataLoader(test_subset, batch_size=eval_batch_size, shuffle=False, num_workers=0)
+    logger.info(f"Evaluation DataLoader created with batch_size={eval_batch_size}, total_samples={len(test_subset)} (Indices hash: {hashlib.md5(str(sampled_indices).encode()).hexdigest()[:8]})")
 
     lpips_fn = None
     if lpips is not None:
@@ -128,26 +150,40 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
 
     K_VALUES = [1, 2, 4, 8, 16, 32, 64, 128]
     results_list = []
-    full_csv_path = os.path.join(METRICS_DIR, "full_attack_metrics.csv")
+    full_csv_path = os.path.join(METRICS_DIR, f"{output_prefix}_full_attack_metrics.csv")
+
+    # Save benchmark run metadata
+    metadata = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "seed": seed,
+        "num_samples": n_eval,
+        "use_official_adapters": use_official_adapters,
+        "device": str(device),
+        "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+        "sample_indices_md5": hashlib.md5(str(sampled_indices).encode()).hexdigest(),
+    }
+    with open(os.path.join(METRICS_DIR, f"{output_prefix}_metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=4)
 
     # ==========================================================================
     # GROUP C: Non-pixel-K Attacks (Dense + Spectral Frequency Domain)
     # ==========================================================================
     logger.info("=== GROUP C: Non-pixel-K Attacks (FGSM, BIM, PGD, SFA) ===")
     group_c_attacks = {
-        "FGSM": FGSMAttack(model, device=device),
-        "BIM": BIMAttack(model, device=device),
-        "PGD": PGDAttack(model, device=device),
-        "SFA": SpectralFrequencyAttack(model, freq_k=15, device=device)
+        "FGSM": (FGSMAttack(model, device=device), "custom-reimplementation"),
+        "BIM": (BIMAttack(model, device=device), "custom-reimplementation"),
+        "PGD": (PGDAttack(model, device=device), "custom-reimplementation"),
+        "SFA": (SpectralFrequencyAttack(model, freq_k=15, device=device), "custom-reimplementation")
     }
 
-    for name, attacker in group_c_attacks.items():
+    for name, (attacker, source_label) in group_c_attacks.items():
         if device.type == "cuda":
             torch.cuda.synchronize()
         t0 = time.time()
-        clean_correct, total_count, robust_correct, adv_succ = 0, 0, 0, 0
-        total_l0, total_l2, total_linf = 0.0, 0.0, 0.0
-        total_psnr, total_ssim, total_lpips = 0.0, 0.0, 0.0
+        
+        all_l0s, all_l2s, all_linfs = [], [], []
+        all_psnrs, all_ssims, all_lpipss = [], [], []
+        all_clean_masks, all_succ_masks = [], []
         total_steps = 0.0
 
         for x, y in eval_loader:
@@ -169,6 +205,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
                 adv_preds = torch.argmax(model(x_adv), dim=1)
 
             r_mask = (adv_preds == y)
+            succ_mask = c_mask & (~r_mask)
+
             diff = x_adv - x
             l0_per = compute_spatial_l0(diff)
             l2_per = torch.norm(diff.view(B, -1), p=2, dim=1)
@@ -178,39 +216,58 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             ssim_per = compute_per_sample_ssim(x, x_adv)
             lpips_per = compute_per_sample_lpips(x, x_adv, lpips_fn)
 
-            clean_correct += c_mask.sum().item()
-            robust_correct += r_mask.sum().item()
-            total_count += B
-            adv_succ += (c_mask & (~r_mask)).sum().item()
-
-            total_l0 += l0_per.sum().item()
-            total_l2 += l2_per.sum().item()
-            total_linf += linf_per.sum().item()
-
-            total_psnr += psnr_per.sum().item()
-            total_ssim += ssim_per.sum().item()
+            all_clean_masks.append(c_mask)
+            all_succ_masks.append(succ_mask)
+            all_l0s.append(l0_per)
+            all_l2s.append(l2_per)
+            all_linfs.append(linf_per)
+            all_psnrs.append(psnr_per)
+            all_ssims.append(ssim_per)
             if lpips_per is not None:
-                total_lpips += lpips_per.sum().item()
+                all_lpipss.append(lpips_per)
 
         if device.type == "cuda":
             torch.cuda.synchronize()
         dt = time.time() - t0
+
+        c_mask_tensor = torch.cat(all_clean_masks)
+        succ_mask_tensor = torch.cat(all_succ_masks)
+        l0_tensor = torch.cat(all_l0s)
+        l2_tensor = torch.cat(all_l2s)
+        linf_tensor = torch.cat(all_linfs)
+        psnr_tensor = torch.cat(all_psnrs)
+        ssim_tensor = torch.cat(all_ssims)
+        lpips_tensor = torch.cat(all_lpipss) if all_lpipss else None
+
+        clean_correct = c_mask_tensor.sum().item()
+        adv_succ = succ_mask_tensor.sum().item()
+        total_count = l0_tensor.numel()
+
         clean_acc = 100.0 * clean_correct / total_count
-        rob_acc = 100.0 * robust_correct / total_count
-        asr = 100.0 * adv_succ / max(1, clean_correct)
+        cond_asr = 100.0 * adv_succ / max(1, clean_correct)
+        rob_acc = 100.0 * (clean_correct - adv_succ) / total_count
+
+        dist_m = compute_distortion_metrics(
+            l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_mask_tensor
+        )
 
         res = {
             "Group": "Group C", "Attack Method": name, "K": "N/A",
+            "Implementation Source": source_label,
             "Clean Acc (%)": round(clean_acc, 2), "Robust Acc (%)": round(rob_acc, 2),
-            "ASR (%)": round(asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
-            "Avg L0": round(total_l0 / total_count, 2), "Avg L0 Ratio": round((total_l0 / total_count) / 1024.0, 4),
-            "Avg L2": round(total_l2 / total_count, 4), "Avg L_inf": round(total_linf / total_count, 4),
-            "PSNR (dB)": round(total_psnr / total_count, 2), "SSIM": round(total_ssim / total_count, 4),
-            "LPIPS": round(total_lpips / total_count, 4) if lpips_fn else None,
+            "Conditional ASR (%)": round(cond_asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
+            "All Avg L0": round(dist_m["all_l0_mean"], 2),
+            "Success Avg L0": round(dist_m["succ_l0_mean"], 2),
+            "Success Median L0": round(dist_m["succ_l0_median"], 2),
+            "Success Avg L2": round(dist_m["succ_l2_mean"], 4),
+            "Success Avg L_inf": round(dist_m["succ_linf_mean"], 4),
+            "Success PSNR (dB)": round(dist_m["succ_psnr_mean"], 2),
+            "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
+            "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
             "Avg Iterations": round(total_steps / total_count, 2),
             "Time/Img (s)": round(dt / total_count, 4)
         }
-        logger.info(f"[Group C] {name}: ASR={res['ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Avg L0={res['Avg L0']}")
+        logger.info(f"[Group C] {name}: Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
         results_list.append(res)
         pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
@@ -221,50 +278,50 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
     if use_official_adapters and OFFICIAL_ADAPTERS_AVAILABLE:
         logger.info(">>> Running Group A with Official Author Adapters (third_party)")
         group_a_factories = {
-            "JSMA": lambda m, k, d: JSMAAttack(m, k=k, device=d),
-            "OnePixel": lambda m, k, d: OnePixelAttack(m, k=k, device=d),
-            "CornerSearch": lambda m, k, d: CornerSearchAttack(m, k=k, device=d),
-            "SAIF": lambda m, k, d: SAIFAttack(m, k=k, device=d),
-            "PGD0": lambda m, k, d: PGD0OfficialAdapter(m, k=k, device=d),
-            "Sparse-PGD": lambda m, k, d: SparsePGDOfficialAdapter(m, sparsity_budget=k, device=d),
-            "Sparse-RS": lambda m, k, d: SparseRSOfficialAdapter(m, n_pixels=k, device=d),
-            "BruSLe": lambda m, k, d: BruSLeAttack(m, k=k, device=d),
-            "IPFSA": lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d),
-            "GradientGuidance": lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d),
-            "CPA": lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d),
-            "FCSA": lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d),
-            "FMSA-budgeted": lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d),
-            "HSA-budgeted": lambda m, k, d: HypergraphSparseAttack(m, budget=k, device=d)
+            "JSMA": (lambda m, k, d: JSMAAttack(m, k=k, device=d), "custom-reimplementation"),
+            "OnePixel": (lambda m, k, d: OnePixelAttack(m, k=k, device=d), "custom-reimplementation"),
+            "CornerSearch": (lambda m, k, d: CornerSearchOfficialAdapter(m, k=k, device=d), "official-adapter"),
+            "SAIF": (lambda m, k, d: SAIFAttack(m, k=k, device=d), "custom-reimplementation"),
+            "PGD0": (lambda m, k, d: PGD0OfficialAdapter(m, k=k, device=d), "official-adapter"),
+            "Sparse-PGD": (lambda m, k, d: SparsePGDOfficialAdapter(m, sparsity_budget=k, device=d), "official-adapter"),
+            "Sparse-RS": (lambda m, k, d: SparseRSOfficialAdapter(m, n_pixels=k, device=d), "official-adapter"),
+            "BruSLe": (lambda m, k, d: BruSLeAttack(m, k=k, device=d), "custom-reimplementation"),
+            "IPFSA": (lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d), "custom-reimplementation"),
+            "GradientGuidance": (lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d), "custom-reimplementation"),
+            "CPA": (lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d), "ours"),
+            "FCSA": (lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d), "ours"),
+            "FMSA-budgeted": (lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d), "ours"),
+            "HSA-budgeted": (lambda m, k, d: HypergraphSparseAttack(m, budget=k, device=d), "ours")
         }
     else:
         group_a_factories = {
-            "JSMA": lambda m, k, d: JSMAAttack(m, k=k, device=d),
-            "OnePixel": lambda m, k, d: OnePixelAttack(m, k=k, device=d),
-            "CornerSearch": lambda m, k, d: CornerSearchAttack(m, k=k, device=d),
-            "SAIF": lambda m, k, d: SAIFAttack(m, k=k, device=d),
-            "PGD0": lambda m, k, d: PGD0Attack(m, k=k, device=d),
-            "Sparse-PGD": lambda m, k, d: SparsePGDAttack(m, sparsity_budget=k, device=d),
-            "Sparse-RS": lambda m, k, d: SparseRSAttack(m, n_pixels=k, device=d),
-            "BruSLe": lambda m, k, d: BruSLeAttack(m, k=k, device=d),
-            "IPFSA": lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d),
-            "GradientGuidance": lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d),
-            "CPA": lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d),
-            "FCSA": lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d),
-            "FMSA-budgeted": lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d),
-            "HSA-budgeted": lambda m, k, d: HypergraphSparseAttack(m, budget=k, device=d)
+            "JSMA": (lambda m, k, d: JSMAAttack(m, k=k, device=d), "custom-reimplementation"),
+            "OnePixel": (lambda m, k, d: OnePixelAttack(m, k=k, device=d), "custom-reimplementation"),
+            "CornerSearch": (lambda m, k, d: CornerSearchAttack(m, k=k, device=d), "custom-reimplementation"),
+            "SAIF": (lambda m, k, d: SAIFAttack(m, k=k, device=d), "custom-reimplementation"),
+            "PGD0": (lambda m, k, d: PGD0Attack(m, k=k, device=d), "custom-reimplementation"),
+            "Sparse-PGD": (lambda m, k, d: SparsePGDAttack(m, sparsity_budget=k, device=d), "custom-reimplementation"),
+            "Sparse-RS": (lambda m, k, d: SparseRSAttack(m, n_pixels=k, device=d), "custom-reimplementation"),
+            "BruSLe": (lambda m, k, d: BruSLeAttack(m, k=k, device=d), "custom-reimplementation"),
+            "IPFSA": (lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d), "custom-reimplementation"),
+            "GradientGuidance": (lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d), "custom-reimplementation"),
+            "CPA": (lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d), "ours"),
+            "FCSA": (lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d), "ours"),
+            "FMSA-budgeted": (lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d), "ours"),
+            "HSA-budgeted": (lambda m, k, d: HypergraphSparseAttack(m, budget=k, device=d), "ours")
         }
 
-    for name, factory in group_a_factories.items():
+    for name, (factory, source_label) in group_a_factories.items():
         for K in K_VALUES:
             attacker = factory(model, K, device)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t0 = time.time()
-            clean_correct, total_count, robust_correct, adv_succ = 0, 0, 0, 0
-            total_l0, total_l2, total_linf = 0.0, 0.0, 0.0
-            total_psnr, total_ssim, total_lpips = 0.0, 0.0, 0.0
+
+            all_l0s, all_l2s, all_linfs = [], [], []
+            all_psnrs, all_ssims, all_lpipss = [], [], []
+            all_clean_masks, all_succ_masks = [], []
             total_steps = 0.0
-            max_l0_observed = 0
 
             for x, y in eval_loader:
                 x, y = x.to(device), y.to(device)
@@ -285,10 +342,10 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
                     adv_preds = torch.argmax(model(x_adv), dim=1)
 
                 r_mask = (adv_preds == y)
+                succ_mask = c_mask & (~r_mask)
+
                 diff = x_adv - x
                 l0_per = compute_spatial_l0(diff)
-                max_l0_observed = max(max_l0_observed, l0_per.max().item())
-
                 l2_per = torch.norm(diff.view(B, -1), p=2, dim=1)
                 linf_per = torch.norm(diff.view(B, -1), p=float('inf'), dim=1)
 
@@ -296,41 +353,58 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
                 ssim_per = compute_per_sample_ssim(x, x_adv)
                 lpips_per = compute_per_sample_lpips(x, x_adv, lpips_fn)
 
-                clean_correct += c_mask.sum().item()
-                robust_correct += r_mask.sum().item()
-                total_count += B
-                adv_succ += (c_mask & (~r_mask)).sum().item()
-
-                total_l0 += l0_per.sum().item()
-                total_l2 += l2_per.sum().item()
-                total_linf += linf_per.sum().item()
-
-                total_psnr += psnr_per.sum().item()
-                total_ssim += ssim_per.sum().item()
+                all_clean_masks.append(c_mask)
+                all_succ_masks.append(succ_mask)
+                all_l0s.append(l0_per)
+                all_l2s.append(l2_per)
+                all_linfs.append(linf_per)
+                all_psnrs.append(psnr_per)
+                all_ssims.append(ssim_per)
                 if lpips_per is not None:
-                    total_lpips += lpips_per.sum().item()
+                    all_lpipss.append(lpips_per)
 
             if device.type == "cuda":
                 torch.cuda.synchronize()
             dt = time.time() - t0
+
+            c_mask_tensor = torch.cat(all_clean_masks)
+            succ_mask_tensor = torch.cat(all_succ_masks)
+            l0_tensor = torch.cat(all_l0s)
+            l2_tensor = torch.cat(all_l2s)
+            linf_tensor = torch.cat(all_linfs)
+            psnr_tensor = torch.cat(all_psnrs)
+            ssim_tensor = torch.cat(all_ssims)
+            lpips_tensor = torch.cat(all_lpipss) if all_lpipss else None
+
+            clean_correct = c_mask_tensor.sum().item()
+            adv_succ = succ_mask_tensor.sum().item()
+            total_count = l0_tensor.numel()
+
             clean_acc = 100.0 * clean_correct / total_count
-            rob_acc = 100.0 * robust_correct / total_count
-            asr = 100.0 * adv_succ / max(1, clean_correct)
-            avg_l0_val = round(total_l0 / total_count, 2)
+            cond_asr = 100.0 * adv_succ / max(1, clean_correct)
+            rob_acc = 100.0 * (clean_correct - adv_succ) / total_count
+
+            dist_m = compute_distortion_metrics(
+                l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_mask_tensor
+            )
 
             res = {
                 "Group": "Group A", "Attack Method": name, "K": K,
+                "Implementation Source": source_label,
                 "Clean Acc (%)": round(clean_acc, 2), "Robust Acc (%)": round(rob_acc, 2),
-                "ASR (%)": round(asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
-                "Avg L0": avg_l0_val, "Avg L0 Ratio": round(avg_l0_val / 1024.0, 4),
-                "Max L0": int(max_l0_observed),
-                "Avg L2": round(total_l2 / total_count, 4), "Avg L_inf": round(total_linf / total_count, 4),
-                "PSNR (dB)": round(total_psnr / total_count, 2), "SSIM": round(total_ssim / total_count, 4),
-                "LPIPS": round(total_lpips / total_count, 4) if lpips_fn else None,
+                "Conditional ASR (%)": round(cond_asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
+                "All Avg L0": round(dist_m["all_l0_mean"], 2),
+                "Success Avg L0": round(dist_m["succ_l0_mean"], 2),
+                "Success Median L0": round(dist_m["succ_l0_median"], 2),
+                "Success Avg L2": round(dist_m["succ_l2_mean"], 4),
+                "Success Avg L_inf": round(dist_m["succ_linf_mean"], 4),
+                "Success PSNR (dB)": round(dist_m["succ_psnr_mean"], 2),
+                "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
+                "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
                 "Avg Iterations": round(total_steps / total_count, 2),
                 "Time/Img (s)": round(dt / total_count, 4)
             }
-            logger.info(f"[Group A] {name} (K={K}): ASR={res['ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Avg L0={res['Avg L0']} (Max L0={max_l0_observed})")
+            logger.info(f"[Group A] {name} (K={K}): Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
             results_list.append(res)
             pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
@@ -341,31 +415,31 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
     if use_official_adapters and OFFICIAL_ADAPTERS_AVAILABLE:
         logger.info(">>> Running Group B with Official Author Adapters (third_party)")
         group_b_attacks = {
-            "SparseFool": SparseFoolOfficialAdapter(model, k=250, steps=50, device=device),
-            "SigmaZero": SigmaZeroOfficialAdapter(model, steps=50, device=device),
-            "Homotopy": HomotopyOfficialAdapter(model, target_sparsity=250, steps=50, device=device),
-            "GSE": GSEOfficialAdapter(model, group_size=4, max_groups=64, steps=50, device=device),
-            "Pixle": PixleAttack(model, n_swaps=20, max_trials=50, device=device),
-            "FMSA-minimal-support": FeatureToMinimalSupportAttack(model, support_budget=250, device=device)
+            "SparseFool": (SparseFoolOfficialAdapter(model, k=250, steps=50, device=device), "official-adapter"),
+            "SigmaZero": (SigmaZeroOfficialAdapter(model, steps=50, device=device), "official-adapter"),
+            "Homotopy": (HomotopyOfficialAdapter(model, target_sparsity=250, steps=50, device=device), "official-adapter"),
+            "GSE": (GSEOfficialAdapter(model, group_size=4, max_groups=64, steps=50, device=device), "official-adapter"),
+            "Pixle": (PixleAttack(model, n_swaps=20, max_trials=50, device=device), "custom-reimplementation"),
+            "FMSA-minimal-support": (FeatureToMinimalSupportAttack(model, support_budget=250, device=device), "ours")
         }
     else:
         group_b_attacks = {
-            "SparseFool": SparseFoolAttack(model, k=250, steps=50, device=device),
-            "SigmaZero": SigmaZeroAttack(model, steps=50, device=device),
-            "Homotopy": HomotopyAttack(model, target_sparsity=250, steps=50, device=device),
-            "GSE": GroupSparseAttack(model, group_size=4, max_groups=64, steps=50, device=device),
-            "Pixle": PixleAttack(model, n_swaps=20, max_trials=50, device=device),
-            "FMSA-minimal-support": FeatureToMinimalSupportAttack(model, support_budget=250, device=device)
+            "SparseFool": (SparseFoolAttack(model, k=250, steps=50, device=device), "custom-reimplementation"),
+            "SigmaZero": (SigmaZeroAttack(model, steps=50, device=device), "custom-reimplementation"),
+            "Homotopy": (HomotopyAttack(model, target_sparsity=250, steps=50, device=device), "custom-reimplementation"),
+            "GSE": (GroupSparseAttack(model, group_size=4, max_groups=64, steps=50, device=device), "custom-reimplementation"),
+            "Pixle": (PixleAttack(model, n_swaps=20, max_trials=50, device=device), "custom-reimplementation"),
+            "FMSA-minimal-support": (FeatureToMinimalSupportAttack(model, support_budget=250, device=device), "ours")
         }
 
-    for name, attacker in group_b_attacks.items():
+    for name, (attacker, source_label) in group_b_attacks.items():
         if device.type == "cuda":
             torch.cuda.synchronize()
         t0 = time.time()
-        clean_correct, total_count = 0, 0
-        sample_l0s, sample_l2s, sample_linfs = [], [], []
-        sample_psnrs, sample_ssims, sample_lpipss = [], [], []
-        sample_fooled = []
+        
+        all_l0s, all_l2s, all_linfs = [], [], []
+        all_psnrs, all_ssims, all_lpipss = [], [], []
+        all_clean_masks, all_fooled_masks = [], []
         total_steps = 0.0
 
         for x, y in eval_loader:
@@ -396,61 +470,64 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             ssim_per = compute_per_sample_ssim(x, x_adv)
             lpips_per = compute_per_sample_lpips(x, x_adv, lpips_fn)
 
-            clean_correct += c_mask.sum().item()
-            total_count += B
-
-            sample_fooled.extend(fooled_mask.detach().cpu().numpy().tolist())
-            sample_l0s.extend(l0_per.detach().cpu().numpy().tolist())
-            sample_l2s.extend(l2_per.detach().cpu().numpy().tolist())
-            sample_linfs.extend(linf_per.detach().cpu().numpy().tolist())
-
-            sample_psnrs.extend(psnr_per.detach().cpu().numpy().tolist())
-            sample_ssims.extend(ssim_per.detach().cpu().numpy().tolist())
+            all_clean_masks.append(c_mask)
+            all_fooled_masks.append(fooled_mask)
+            all_l0s.append(l0_per)
+            all_l2s.append(l2_per)
+            all_linfs.append(linf_per)
+            all_psnrs.append(psnr_per)
+            all_ssims.append(ssim_per)
             if lpips_per is not None:
-                sample_lpipss.extend(lpips_per.detach().cpu().numpy().tolist())
+                all_lpipss.append(lpips_per)
 
         if device.type == "cuda":
             torch.cuda.synchronize()
         dt = time.time() - t0
+
+        c_mask_tensor = torch.cat(all_clean_masks)
+        fooled_mask_tensor = torch.cat(all_fooled_masks)
+        l0_tensor = torch.cat(all_l0s)
+        l2_tensor = torch.cat(all_l2s)
+        linf_tensor = torch.cat(all_linfs)
+        psnr_tensor = torch.cat(all_psnrs)
+        ssim_tensor = torch.cat(all_ssims)
+        lpips_tensor = torch.cat(all_lpipss) if all_lpipss else None
+
+        clean_correct = c_mask_tensor.sum().item()
+        total_count = l0_tensor.numel()
         clean_acc = 100.0 * clean_correct / total_count
 
-        fooled_arr = pd.Series(sample_fooled)
-        l0_arr = pd.Series(sample_l0s)
-        l2_arr = pd.Series(sample_l2s)
-        linf_arr = pd.Series(sample_linfs)
-        psnr_arr = pd.Series(sample_psnrs)
-        ssim_arr = pd.Series(sample_ssims)
-        lpips_arr = pd.Series(sample_lpipss) if sample_lpipss else None
-
         for K in K_VALUES:
-            succ_k = fooled_arr & (l0_arr <= K)
-            success_count_k = int(succ_k.sum())
-            
-            robust_acc_k = 100.0 * (clean_correct - success_count_k) / total_count
-            accuracy_drop_k = 100.0 * success_count_k / total_count
-            conditional_asr_k = 100.0 * success_count_k / max(1, clean_correct)
+            # Correct Group B Mask: Attack MUST succeed AND modified pixels <= K
+            succ_k_mask = fooled_mask_tensor & (l0_tensor <= K)
+            success_count_k = int(succ_k_mask.sum().item())
 
-            sub_mask = (l0_arr <= K)
-            if not sub_mask.any():
-                sub_mask = (l0_arr == l0_arr) # fallback to all if none
+            robust_acc_k = 100.0 * (clean_correct - success_count_k) / total_count
+            cond_asr_k = 100.0 * success_count_k / max(1, clean_correct)
+
+            dist_m_k = compute_distortion_metrics(
+                l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_k_mask
+            )
 
             res = {
                 "Group": "Group B", "Attack Method": name, "K": K,
+                "Implementation Source": source_label,
                 "Clean Acc (%)": round(clean_acc, 2), 
                 "Robust Acc (%)": round(robust_acc_k, 2),
-                "ASR (%)": round(conditional_asr_k, 2), 
-                "Accuracy Drop (%)": round(accuracy_drop_k, 2),
-                "Avg L0": round(l0_arr[sub_mask].mean(), 2), 
-                "Avg L0 Ratio": round(l0_arr[sub_mask].mean() / 1024.0, 4),
-                "Avg L2": round(l2_arr[sub_mask].mean(), 4), 
-                "Avg L_inf": round(linf_arr[sub_mask].mean(), 4),
-                "PSNR (dB)": round(psnr_arr[sub_mask].mean(), 2), 
-                "SSIM": round(ssim_arr[sub_mask].mean(), 4),
-                "LPIPS": round(lpips_arr[sub_mask].mean(), 4) if lpips_arr is not None else None,
+                "Conditional ASR (%)": round(cond_asr_k, 2), 
+                "Accuracy Drop (%)": round(clean_acc - robust_acc_k, 2),
+                "All Avg L0": round(dist_m_k["all_l0_mean"], 2),
+                "Success Avg L0": round(dist_m_k["succ_l0_mean"], 2), 
+                "Success Median L0": round(dist_m_k["succ_l0_median"], 2),
+                "Success Avg L2": round(dist_m_k["succ_l2_mean"], 4), 
+                "Success Avg L_inf": round(dist_m_k["succ_linf_mean"], 4),
+                "Success PSNR (dB)": round(dist_m_k["succ_psnr_mean"], 2), 
+                "Success SSIM": round(dist_m_k["succ_ssim_mean"], 4),
+                "Success LPIPS": round(dist_m_k["succ_lpips_mean"], 4) if dist_m_k["succ_lpips_mean"] is not None else None,
                 "Avg Iterations": round(total_steps / total_count, 2),
                 "Time/Img (s)": round(dt / total_count, 4)
             }
-            logger.info(f"[Group B] {name} (K={K}): ASR@K={res['ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Mean L0={res['Avg L0']}")
+            logger.info(f"[Group B] {name} (K={K}): Conditional ASR@K={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
             results_list.append(res)
             pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
@@ -458,7 +535,7 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
     df_all.to_csv(full_csv_path, index=False)
     
     json_records = df_all.where(pd.notnull(df_all), None).to_dict(orient="records")
-    with open(os.path.join(METRICS_DIR, "full_attack_metrics.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(METRICS_DIR, f"{output_prefix}_full_attack_metrics.json"), "w", encoding="utf-8") as f:
         json.dump(json_records, f, indent=4)
 
     return df_all
@@ -466,11 +543,23 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
 if __name__ == "__main__":
     logger.info("=== Running Group A, B, C Experimental Attack Benchmark ===")
     num_samples = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 10
-    logger.info(f"Benchmark configured to run with num_samples = {num_samples}")
+    output_prefix = sys.argv[2] if len(sys.argv) > 2 else "local_test_10"
+    use_official = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
+    
+    logger.info(f"Benchmark configured with num_samples={num_samples}, output_prefix='{output_prefix}', use_official_adapters={use_official}")
     model = get_model("resnet18", pretrained=False)
     ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
     if ckpt:
         model = get_model(checkpoint_path=ckpt, device=DEVICE)
+        
     _, _, test_loader = get_dataloaders(batch_size=EVAL_BATCH_SIZE)
-    df_results = run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SIZE, num_samples=num_samples, device=DEVICE, use_official_adapters=True)
+    df_results = run_attack_benchmark_suite(
+        model, 
+        test_loader, 
+        eval_batch_size=EVAL_BATCH_SIZE, 
+        num_samples=num_samples, 
+        device=DEVICE, 
+        use_official_adapters=use_official,
+        output_prefix=output_prefix
+    )
     logger.info(f"\n{df_results.to_string(index=False)}")

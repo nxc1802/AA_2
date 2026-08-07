@@ -20,3 +20,6 @@ resnet18_cifar10_best.pth
 venv/
 .venv/
 env/
+
+# Output directories
+result/

@@ -2,7 +2,14 @@ import time
 from parsers import BaseParser
 import os
 
-from datasets import BaseDataset
+try:
+    from .datasets import BaseDataset
+except Exception:
+    try:
+        import datasets as local_ds
+        BaseDataset = getattr(local_ds, "BaseDataset", None)
+    except Exception:
+        BaseDataset = None
 import torchvision.transforms as transforms
 import torch
 from torch.utils.data import DataLoader

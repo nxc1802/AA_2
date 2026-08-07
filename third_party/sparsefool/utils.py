@@ -4,16 +4,19 @@ import copy
 
 
 def clip_image_values(x, minv, maxv):
-
-    x = torch.max(x, minv)
-    x = torch.min(x, maxv)
-    return x
+    if isinstance(minv, (int, float)) and isinstance(maxv, (int, float)):
+        return torch.clamp(x, minv, maxv)
+    if isinstance(minv, (int, float)):
+        minv = torch.tensor(minv, device=x.device, dtype=x.dtype)
+    if isinstance(maxv, (int, float)):
+        maxv = torch.tensor(maxv, device=x.device, dtype=x.dtype)
+    return torch.min(torch.max(x, minv), maxv)
 
 
 def valid_bounds(img, delta=255):
 
     im = copy.deepcopy(np.asarray(img))
-    im = im.astype(np.int)
+    im = im.astype(int)
 
     # General valid bounds [0, 255]
     valid_lb = np.zeros_like(im)

@@ -1,7 +1,17 @@
 import numpy as np
 import torch
 import copy
-from torch.autograd.gradcheck import zero_gradients
+def zero_gradients(x):
+    if isinstance(x, torch.Tensor):
+        if x.grad is not None:
+            x.grad.detach_()
+            x.grad.zero_()
+    elif isinstance(x, (list, tuple)):
+        for tensor in x:
+            if tensor is not None and tensor.grad is not None:
+                tensor.grad.detach_()
+                tensor.grad.zero_()
+
 from torch.autograd import Variable
 
 

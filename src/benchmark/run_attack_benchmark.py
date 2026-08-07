@@ -142,6 +142,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
     }
 
     for name, attacker in group_c_attacks.items():
+        if device.type == "cuda":
+            torch.cuda.synchronize()
         t0 = time.time()
         clean_correct, total_count, robust_correct, adv_succ = 0, 0, 0, 0
         total_l0, total_l2, total_linf = 0.0, 0.0, 0.0
@@ -190,6 +192,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             if lpips_per is not None:
                 total_lpips += lpips_per.sum().item()
 
+        if device.type == "cuda":
+            torch.cuda.synchronize()
         dt = time.time() - t0
         clean_acc = 100.0 * clean_correct / total_count
         rob_acc = 100.0 * robust_correct / total_count
@@ -219,12 +223,12 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
         group_a_factories = {
             "JSMA": lambda m, k, d: JSMAAttack(m, k=k, device=d),
             "OnePixel": lambda m, k, d: OnePixelAttack(m, k=k, device=d),
-            "CornerSearch": lambda m, k, d: CornerSearchOfficialAdapter(m, k=k, device=d),
+            "CornerSearch": lambda m, k, d: CornerSearchAttack(m, k=k, device=d),
             "SAIF": lambda m, k, d: SAIFAttack(m, k=k, device=d),
             "PGD0": lambda m, k, d: PGD0OfficialAdapter(m, k=k, device=d),
             "Sparse-PGD": lambda m, k, d: SparsePGDOfficialAdapter(m, sparsity_budget=k, device=d),
             "Sparse-RS": lambda m, k, d: SparseRSOfficialAdapter(m, n_pixels=k, device=d),
-            "BruSLe": lambda m, k, d: BruSLeAttack(m, block_size=max(1, int(k**0.5)), device=d),
+            "BruSLe": lambda m, k, d: BruSLeAttack(m, k=k, device=d),
             "IPFSA": lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d),
             "GradientGuidance": lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d),
             "CPA": lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d),
@@ -241,7 +245,7 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             "PGD0": lambda m, k, d: PGD0Attack(m, k=k, device=d),
             "Sparse-PGD": lambda m, k, d: SparsePGDAttack(m, sparsity_budget=k, device=d),
             "Sparse-RS": lambda m, k, d: SparseRSAttack(m, n_pixels=k, device=d),
-            "BruSLe": lambda m, k, d: BruSLeAttack(m, block_size=max(1, int(k**0.5)), device=d),
+            "BruSLe": lambda m, k, d: BruSLeAttack(m, k=k, device=d),
             "IPFSA": lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d),
             "GradientGuidance": lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d),
             "CPA": lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d),
@@ -253,6 +257,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
     for name, factory in group_a_factories.items():
         for K in K_VALUES:
             attacker = factory(model, K, device)
+            if device.type == "cuda":
+                torch.cuda.synchronize()
             t0 = time.time()
             clean_correct, total_count, robust_correct, adv_succ = 0, 0, 0, 0
             total_l0, total_l2, total_linf = 0.0, 0.0, 0.0
@@ -304,6 +310,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
                 if lpips_per is not None:
                     total_lpips += lpips_per.sum().item()
 
+            if device.type == "cuda":
+                torch.cuda.synchronize()
             dt = time.time() - t0
             clean_acc = 100.0 * clean_correct / total_count
             rob_acc = 100.0 * robust_correct / total_count
@@ -351,6 +359,8 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
         }
 
     for name, attacker in group_b_attacks.items():
+        if device.type == "cuda":
+            torch.cuda.synchronize()
         t0 = time.time()
         clean_correct, total_count = 0, 0
         sample_l0s, sample_l2s, sample_linfs = [], [], []
@@ -389,16 +399,18 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             clean_correct += c_mask.sum().item()
             total_count += B
 
-            sample_fooled.extend(fooled_mask.cpu().numpy().tolist())
-            sample_l0s.extend(l0_per.cpu().numpy().tolist())
-            sample_l2s.extend(l2_per.cpu().numpy().tolist())
-            sample_linfs.extend(linf_per.cpu().numpy().tolist())
+            sample_fooled.extend(fooled_mask.detach().cpu().numpy().tolist())
+            sample_l0s.extend(l0_per.detach().cpu().numpy().tolist())
+            sample_l2s.extend(l2_per.detach().cpu().numpy().tolist())
+            sample_linfs.extend(linf_per.detach().cpu().numpy().tolist())
 
-            sample_psnrs.extend(psnr_per.cpu().numpy().tolist())
-            sample_ssims.extend(ssim_per.cpu().numpy().tolist())
+            sample_psnrs.extend(psnr_per.detach().cpu().numpy().tolist())
+            sample_ssims.extend(ssim_per.detach().cpu().numpy().tolist())
             if lpips_per is not None:
-                sample_lpipss.extend(lpips_per.cpu().numpy().tolist())
+                sample_lpipss.extend(lpips_per.detach().cpu().numpy().tolist())
 
+        if device.type == "cuda":
+            torch.cuda.synchronize()
         dt = time.time() - t0
         clean_acc = 100.0 * clean_correct / total_count
 
@@ -418,19 +430,23 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
             accuracy_drop_k = 100.0 * success_count_k / total_count
             conditional_asr_k = 100.0 * success_count_k / max(1, clean_correct)
 
+            sub_mask = (l0_arr <= K)
+            if not sub_mask.any():
+                sub_mask = (l0_arr == l0_arr) # fallback to all if none
+
             res = {
                 "Group": "Group B", "Attack Method": name, "K": K,
                 "Clean Acc (%)": round(clean_acc, 2), 
                 "Robust Acc (%)": round(robust_acc_k, 2),
                 "ASR (%)": round(conditional_asr_k, 2), 
                 "Accuracy Drop (%)": round(accuracy_drop_k, 2),
-                "Avg L0": round(l0_arr.mean(), 2), 
-                "Avg L0 Ratio": round(l0_arr.mean() / 1024.0, 4),
-                "Avg L2": round(l2_arr.mean(), 4), 
-                "Avg L_inf": round(linf_arr.mean(), 4),
-                "PSNR (dB)": round(psnr_arr.mean(), 2), 
-                "SSIM": round(ssim_arr.mean(), 4),
-                "LPIPS": round(lpips_arr.mean(), 4) if lpips_arr is not None else None,
+                "Avg L0": round(l0_arr[sub_mask].mean(), 2), 
+                "Avg L0 Ratio": round(l0_arr[sub_mask].mean() / 1024.0, 4),
+                "Avg L2": round(l2_arr[sub_mask].mean(), 4), 
+                "Avg L_inf": round(linf_arr[sub_mask].mean(), 4),
+                "PSNR (dB)": round(psnr_arr[sub_mask].mean(), 2), 
+                "SSIM": round(ssim_arr[sub_mask].mean(), 4),
+                "LPIPS": round(lpips_arr[sub_mask].mean(), 4) if lpips_arr is not None else None,
                 "Avg Iterations": round(total_steps / total_count, 2),
                 "Time/Img (s)": round(dt / total_count, 4)
             }
@@ -449,10 +465,12 @@ def run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SI
 
 if __name__ == "__main__":
     logger.info("=== Running Group A, B, C Experimental Attack Benchmark ===")
+    num_samples = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 10
+    logger.info(f"Benchmark configured to run with num_samples = {num_samples}")
     model = get_model("resnet18", pretrained=False)
     ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
     if ckpt:
         model = get_model(checkpoint_path=ckpt, device=DEVICE)
     _, _, test_loader = get_dataloaders(batch_size=EVAL_BATCH_SIZE)
-    df_results = run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SIZE, num_samples=NUM_BENCHMARK_TEST_SAMPLES, device=DEVICE, use_official_adapters=True)
+    df_results = run_attack_benchmark_suite(model, test_loader, eval_batch_size=EVAL_BATCH_SIZE, num_samples=num_samples, device=DEVICE, use_official_adapters=True)
     logger.info(f"\n{df_results.to_string(index=False)}")

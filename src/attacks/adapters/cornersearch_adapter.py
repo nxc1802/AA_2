@@ -22,8 +22,8 @@ class CornerSearchOfficialAdapter:
 
             args = {
                 'type_attack': 'L0',
-                'n_iter': self.max_iter,
-                'n_max': 100,
+                'n_iter': min(self.max_iter, 50),
+                'n_max': min(max(1, self.k), 10),
                 'epsilon': 0.0,
                 'kappa': 0.0,
                 'sparsity': self.k,

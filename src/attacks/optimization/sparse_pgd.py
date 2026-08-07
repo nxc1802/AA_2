@@ -35,28 +35,29 @@ class SparsePGDAttack:
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
-            p.requires_grad_(True)
-            
-            # Select exact top-K spatial mask from saliency / mask logits
-            mask = exact_spatial_topk_mask(m_logits, self.k).float()
-            delta = p * mask
-            x_adv = (x + delta).clamp(0.0, 1.0)
-            
-            out = self.model(x_adv)
-            loss_vec = self.criterion(out, y)
-            loss = loss_vec.sum()
+            # Compute loss on unmasked perturbation to update spatial mask logits across all pixels
+            p = p.detach().requires_grad_(True)
+            x_full = (x + p).clamp(0.0, 1.0)
+            out_full = self.model(x_full)
+            loss_full = self.criterion(out_full, y).sum()
 
             self.model.zero_grad()
-            loss.backward()
+            loss_full.backward()
 
             with torch.no_grad():
                 grad_p = p.grad.data if p.grad is not None else torch.zeros_like(p)
                 p = (p + self.alpha * grad_p.sign()).clamp(-1.0, 1.0)
                 
-                # Update mask logits based on gradient magnitude attribution
+                # Update mask logits based on gradient magnitude attribution across all pixels
                 spatial_grad_mag = grad_p.abs().sum(dim=1, keepdim=True)
                 m_logits = m_logits + spatial_grad_mag
 
+            # Apply top-K mask for actual adversarial step evaluation
+            mask = exact_spatial_topk_mask(m_logits, self.k).float()
+            delta = p * mask
+            x_adv = (x + delta).clamp(0.0, 1.0)
+
+            with torch.no_grad():
                 out_step = self.model(x_adv)
                 curr_loss = self.criterion(out_step, y)
                 preds = out_step.argmax(dim=1)

@@ -94,6 +94,7 @@ class OnePixelAttack:
                 improved = trial_losses > pop_losses
                 pop[improved] = trials[improved]
                 pop_losses[improved] = trial_losses[improved]
+                outs[improved] = trial_outs[improved]
 
                 curr_best = pop_losses.argmax().item()
                 if pop_losses[curr_best].item() > best_loss:

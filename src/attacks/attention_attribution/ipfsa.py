@@ -52,6 +52,8 @@ class IPFSAAttack:
             active_mask = (~fooled_mask).view(B, 1, 1, 1).float()
             step_update = self.alpha * grad.sign() * mask * active_mask
             x_adv = torch.clamp(x_adv + step_update, 0.0, 1.0).detach()
+            from src.core.projections import project_l0
+            x_adv = (x + project_l0(x_adv - x, self.k)).clamp(0.0, 1.0).detach()
 
             with torch.no_grad():
                 preds = self.model(x_adv).argmax(dim=1)

@@ -79,6 +79,8 @@ class FeatureToMinimalSupportAttack:
             
             step_update = self.alpha * grad.sign() * support_mask * active_mask
             adv_images = torch.clamp(adv_images + step_update, 0.0, 1.0).detach()
+            from src.core.projections import project_l0
+            adv_images = (orig_images + project_l0(adv_images - orig_images, self.support_budget)).clamp(0.0, 1.0).detach()
 
             with torch.no_grad():
                 preds = self.model(adv_images).argmax(dim=1)

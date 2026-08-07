@@ -24,7 +24,8 @@ class JSMAAttack:
         perturbed_count = torch.zeros(B, dtype=torch.int32, device=self.device)
         mask_perturbed = torch.zeros((B, H, W), dtype=torch.bool, device=self.device)
         
-        steps_to_fool = torch.full((B,), self.max_iter, dtype=torch.float, device=self.device)
+        effective_max_iter = max(self.max_iter, self.k)
+        steps_to_fool = torch.full((B,), effective_max_iter, dtype=torch.float, device=self.device)
         fooled_mask = torch.zeros(B, dtype=torch.bool, device=self.device)
 
         with torch.no_grad():
@@ -32,7 +33,7 @@ class JSMAAttack:
         fooled_mask = (preds != y)
         steps_to_fool[fooled_mask] = 0.0
 
-        for step in range(self.max_iter):
+        for step in range(effective_max_iter):
             with torch.no_grad():
                 preds = self.model(x_adv).argmax(dim=1)
             

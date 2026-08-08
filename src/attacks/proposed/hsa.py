@@ -69,6 +69,9 @@ class HypergraphSparseAttack:
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
+            if fooled_mask.all():
+                break
+
             adv_images = (orig_images + delta).clamp(0.0, 1.0).requires_grad_(True)
             outputs = self.model(adv_images)
             loss_vec = self.criterion(outputs, labels)
@@ -80,10 +83,15 @@ class HypergraphSparseAttack:
             grad = adv_images.grad.data
             node_centrality = self._compute_hypergraph_centrality(grad)
 
-            hypergraph_mask = exact_spatial_topk_mask(node_centrality, self.budget).float()
-            candidate_delta = delta + self.alpha * grad.sign() * hypergraph_mask
+            # Mask out already fooled samples from hypergraph selection & delta updates
+            centrality_masked = node_centrality.clone()
+            centrality_masked[fooled_mask] = -float('inf')
+
+            hypergraph_mask = exact_spatial_topk_mask(centrality_masked, self.budget).float()
+            candidate_delta = delta + self.alpha * grad.sign() * hypergraph_mask * (~fooled_mask).view(B, 1, 1, 1).float()
             
-            delta = project_l0(candidate_delta, self.budget)
+            delta_proj = project_l0(candidate_delta, self.budget)
+            delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
             adv_images_proj = torch.clamp(orig_images + delta, 0.0, 1.0)
 
             with torch.no_grad():

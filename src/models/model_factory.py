@@ -129,6 +129,72 @@ def adapt_resnet_for_cifar(model, num_classes=10):
         model.fc = nn.Linear(in_features, num_classes)
     return model
 
+class BasicBlockWRN(nn.Module):
+    def __init__(self, in_planes, out_planes, stride, drop_rate=0.0):
+        super(BasicBlockWRN, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_planes)
+        self.relu2 = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_planes, out_planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.drop_rate = drop_rate
+        self.equal_in_out = (in_planes == out_planes)
+        self.conv_shortcut = (not self.equal_in_out) and nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0, bias=False) or None
+
+    def forward(self, x):
+        if not self.equal_in_out:
+            x = self.relu1(self.bn1(x))
+            out = self.conv1(x)
+        else:
+            out = self.conv1(self.relu1(self.bn1(x)))
+        if self.drop_rate > 0:
+            out = torch.nn.functional.dropout(out, p=self.drop_rate, training=self.training)
+        out = self.conv2(self.relu2(self.bn2(out)))
+        return torch.add(self.conv_shortcut(x) if self.conv_shortcut is not None else x, out)
+
+class NetworkBlockWRN(nn.Module):
+    def __init__(self, nb_layers, in_planes, out_planes, block, stride=1, drop_rate=0.0):
+        super(NetworkBlockWRN, self).__init__()
+        self.layer = self._make_layer(block, in_planes, out_planes, nb_layers, stride, drop_rate)
+
+    def _make_layer(self, block, in_planes, out_planes, nb_layers, stride, drop_rate):
+        layers = []
+        for i in range(int(nb_layers)):
+            layers.append(block(i == 0 and in_planes or out_planes, out_planes, i == 0 and stride or 1, drop_rate))
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layer(x)
+
+class WideResNet28_10(nn.Module):
+    """WideResNet-28-10 for CIFAR-10 (Zagoruyko & Komodakis, 2016)."""
+    def __init__(self, depth=28, widen_factor=10, drop_rate=0.0, num_classes=10):
+        super(WideResNet28_10, self).__init__()
+        n_channels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
+        assert (depth - 4) % 6 == 0
+        n = (depth - 4) / 6
+        block = BasicBlockWRN
+        self.conv1 = nn.Conv2d(3, n_channels[0], kernel_size=3, stride=1, padding=1, bias=False)
+        self.block1 = NetworkBlockWRN(n, n_channels[0], n_channels[1], block, 1, drop_rate)
+        self.block2 = NetworkBlockWRN(n, n_channels[1], n_channels[2], block, 2, drop_rate)
+        self.block3 = NetworkBlockWRN(n, n_channels[2], n_channels[3], block, 2, drop_rate)
+        self.bn1 = nn.BatchNorm2d(n_channels[3])
+        self.relu = nn.ReLU(inplace=True)
+        self.fc = nn.Linear(n_channels[3], num_classes)
+        self.n_channels = n_channels[3]
+        self.architecture_name = "wideresnet28_10"
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.relu(self.bn1(out))
+        out = torch.nn.functional.avg_pool2d(out, 8)
+        out = out.view(-1, self.n_channels)
+        return self.fc(out)
+
 def get_model(model_name=MODEL_NAME, num_classes=NUM_CLASSES, pretrained=False, checkpoint_path=None, device=DEVICE):
     """Instantiates neural network backbones."""
     logger.info(f"Instantiating backbone: '{model_name}' (Device={device})")
@@ -137,10 +203,14 @@ def get_model(model_name=MODEL_NAME, num_classes=NUM_CLASSES, pretrained=False, 
         weights = ResNet18_Weights.DEFAULT if pretrained else None
         model = resnet18(weights=weights)
         model = adapt_resnet_for_cifar(model, num_classes=num_classes)
+        model.architecture_name = "resnet18"
     elif model_name.lower() == "resnet50":
         weights = ResNet50_Weights.DEFAULT if pretrained else None
         model = resnet50(weights=weights)
         model = adapt_resnet_for_cifar(model, num_classes=num_classes)
+        model.architecture_name = "resnet50"
+    elif model_name.lower() in ["wideresnet28_10", "wideresnet", "wrn28_10"]:
+        model = WideResNet28_10(depth=28, widen_factor=10, num_classes=num_classes)
     else:
         raise ValueError(f"Unsupported model architecture: {model_name}")
 

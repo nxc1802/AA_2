@@ -7,6 +7,7 @@ class GaussianBlurDefense:
     def __init__(self, kernel_size: int = 3, sigma: float = 1.0):
         self.kernel_size = kernel_size
         self.sigma = sigma
+        self.is_differentiable = True
 
     def defend(self, images: torch.Tensor) -> torch.Tensor:
         device = images.device

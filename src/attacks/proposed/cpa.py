@@ -59,6 +59,9 @@ class CooperativePixelsAttack:
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
+            if fooled_mask.all():
+                break
+
             adv_images = (orig_images + delta).clamp(0.0, 1.0).requires_grad_(True)
             outputs = self.model(adv_images)
             loss_vec = self.criterion(outputs, labels)
@@ -70,11 +73,18 @@ class CooperativePixelsAttack:
             grad = adv_images.grad.data
             coop_score = self._compute_directional_cooperation(grad)
 
-            coalition_mask = exact_spatial_topk_mask(coop_score, self.coalition_size).float()
-            candidate_delta = delta + self.alpha * grad.sign() * coalition_mask
+            # Mask out already fooled samples from coalition selection & delta updates
+            coop_score_masked = coop_score.clone()
+            coop_score_masked[fooled_mask] = -float('inf')
+
+            coalition_mask = exact_spatial_topk_mask(coop_score_masked, self.coalition_size).float()
+            candidate_delta = delta + self.alpha * grad.sign() * coalition_mask * (~fooled_mask).view(B, 1, 1, 1).float()
             
             # Project onto hard L0 ball of radius coalition_size
-            delta = project_l0(candidate_delta, self.coalition_size)
+            delta_proj = project_l0(candidate_delta, self.coalition_size)
+            
+            # Freeze delta for already fooled samples
+            delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
             adv_images_proj = torch.clamp(orig_images + delta, 0.0, 1.0)
 
             with torch.no_grad():

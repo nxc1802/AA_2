@@ -60,6 +60,9 @@ class FunctionalCoalitionSparseAttack:
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
+            if fooled_mask.all():
+                break
+
             adv_images = (orig_images + delta).clamp(0.0, 1.0).requires_grad_(True)
             outputs = self.model(adv_images)
             loss_vec = self.criterion(outputs, labels)
@@ -71,10 +74,15 @@ class FunctionalCoalitionSparseAttack:
             grad = adv_images.grad.data
             coalition_score = self._compute_coalition_score(grad)
 
-            coalition_mask = exact_spatial_topk_mask(coalition_score, self.max_coalition_size).float()
-            candidate_delta = delta + self.alpha * grad.sign() * coalition_mask
+            # Mask out already fooled samples from coalition selection & delta updates
+            coalition_score_masked = coalition_score.clone()
+            coalition_score_masked[fooled_mask] = -float('inf')
+
+            coalition_mask = exact_spatial_topk_mask(coalition_score_masked, self.max_coalition_size).float()
+            candidate_delta = delta + self.alpha * grad.sign() * coalition_mask * (~fooled_mask).view(B, 1, 1, 1).float()
             
-            delta = project_l0(candidate_delta, self.max_coalition_size)
+            delta_proj = project_l0(candidate_delta, self.max_coalition_size)
+            delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
             adv_images_proj = torch.clamp(orig_images + delta, 0.0, 1.0)
 
             with torch.no_grad():

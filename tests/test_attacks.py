@@ -277,6 +277,26 @@ class TestAttacks(unittest.TestCase):
         for c in range(10):
             self.assertEqual(counts[c], 2)
 
+    def test_bpda_adapter_gradient_flow(self):
+        from src.defenses.bpda_adapter import DefendedModelAdapter
+        from src.defenses.preprocessing.median_filter import MedianFilterDefense
+        device = get_best_device()
+        model = prepare_model_for_eval(DummyModel(), device)
+        adapter = DefendedModelAdapter(model, defense=MedianFilterDefense(), mode="adaptive")
+        x = torch.rand(2, 3, 32, 32, device=device, requires_grad=True)
+        out = adapter(x)
+        loss = out.sum()
+        loss.backward()
+        self.assertIsNotNone(x.grad)
+
+    def test_wideresnet28_10_instantiation(self):
+        from src.models.model_factory import get_model
+        device = get_best_device()
+        model = get_model("wideresnet28_10", device=device)
+        x = torch.rand(2, 3, 32, 32, device=device)
+        out = model(x)
+        self.assertEqual(out.shape, (2, 10))
+
     def test_invalid_checkpoint_raises_error(self):
         from src.models.model_factory import get_model
         with self.assertRaises(FileNotFoundError):

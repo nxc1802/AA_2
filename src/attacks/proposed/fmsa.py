@@ -90,6 +90,9 @@ class FeatureToMinimalSupportAttack:
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
+            if fooled_mask.all():
+                break
+
             adv_images = (orig_images + delta).clamp(0.0, 1.0).requires_grad_(True)
             outputs = self.model(adv_images)
             
@@ -109,10 +112,15 @@ class FeatureToMinimalSupportAttack:
             grad = adv_images.grad.data
             grad_mag = grad.abs().sum(dim=1, keepdim=True)
             
-            support_mask = exact_spatial_topk_mask(grad_mag, self.support_budget).float()
-            candidate_delta = delta + self.alpha * grad.sign() * support_mask
+            # Mask out already fooled samples from support selection & delta updates
+            grad_mag_masked = grad_mag.clone()
+            grad_mag_masked[fooled_mask] = -float('inf')
+
+            support_mask = exact_spatial_topk_mask(grad_mag_masked, self.support_budget).float()
+            candidate_delta = delta + self.alpha * grad.sign() * support_mask * (~fooled_mask).view(B, 1, 1, 1).float()
             
-            delta = project_l0(candidate_delta, self.support_budget)
+            delta_proj = project_l0(candidate_delta, self.support_budget)
+            delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
             adv_images_proj = torch.clamp(orig_images + delta, 0.0, 1.0)
 
             with torch.no_grad():

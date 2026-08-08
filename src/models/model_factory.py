@@ -17,6 +17,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from huggingface_hub import HfApi, hf_hub_download
 from src.datasets.dataset_loader import HFDatasetWrapper
 
+from src.core.utils import get_best_device
+
 HF_REPO_ID = "Cuong2004/AA"
 HF_TOKEN = os.getenv("HF_TOKEN", None)
 
@@ -25,7 +27,7 @@ HF_TOKEN = os.getenv("HF_TOKEN", None)
 # ==============================================================================
 MODEL_NAME = "resnet18"
 NUM_CLASSES = 10
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = get_best_device()
 RESULT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../result"))
 SAVED_MODELS_DIR = os.path.join(RESULT_DIR, "saved_models")
 LOG_DIR = os.path.join(RESULT_DIR, "logs")

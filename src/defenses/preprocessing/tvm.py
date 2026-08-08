@@ -1,12 +1,14 @@
 import torch
 
+from src.core.utils import get_best_device
+
 class TotalVariationMinimizationDefense:
     """Total Variation Minimization (TVM) smoothing defense."""
     def __init__(self, steps: int = 10, weight: float = 0.05, lr: float = 0.01, device: torch.device = None):
         self.steps = steps
         self.weight = weight
         self.lr = lr
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def defend(self, images: torch.Tensor) -> torch.Tensor:
         orig = images.clone().detach().to(self.device)

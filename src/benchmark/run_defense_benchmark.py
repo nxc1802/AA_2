@@ -13,7 +13,7 @@ from tqdm import tqdm
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from src.datasets.dataset_loader import get_sample_batch
 from src.models.model_factory import get_model, find_existing_checkpoint
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 # Defenses
 from src.defenses.preprocessing.gaussian_blur import GaussianBlurDefense
@@ -31,7 +31,7 @@ from src.attacks.optimization.pgd0 import PGD0Attack
 # ==============================================================================
 NUM_SAMPLES = 50
 BATCH_SIZE = 64
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = get_best_device()
 RESULT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../result"))
 METRICS_DIR = os.path.join(RESULT_DIR, "metrics")
 LOG_DIR = os.path.join(RESULT_DIR, "logs")

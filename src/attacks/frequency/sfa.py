@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from src.core.utils import get_best_device
+
 class SFAAttack:
     """Authentic Spectral Frequency Attack (SFA - FFT Frequency Domain)."""
     def __init__(self, model, k=15, freq_k=None, steps=25, alpha=4/255.0, device=None):
@@ -8,7 +10,7 @@ class SFAAttack:
         self.k = freq_k if freq_k is not None else k
         self.steps = steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss()
 
     def attack(self, x, y):

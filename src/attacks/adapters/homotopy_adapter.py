@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from src.attacks.adapters.utils import scoped_sys_path
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 THIRD_PARTY_HOMOTOPY = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../third_party/sparseadv_homotopy"))
 
@@ -15,7 +15,7 @@ class HomotopyOfficialAdapter:
         self.model = prepare_model_for_eval(model, device)
         self.k = target_sparsity if target_sparsity is not None else k
         self.steps = steps
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         with scoped_sys_path(THIRD_PARTY_HOMOTOPY):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.core.projections import project_l0
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class GSEAttack:
     """Group Sparse Attack (GSE - 2x2 Spatial Blocks) with exact L0 projection."""
@@ -11,7 +11,7 @@ class GSEAttack:
         self.group_size = group_size
         self.steps = steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss(reduction='none')
         
         if max_groups is not None:

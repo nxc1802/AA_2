@@ -27,7 +27,7 @@ def linear_solver(x_0, normal, boundary_point, lb, ub):
         pert = f_k.abs() / coord_vec.abs().max()
 
         mask = torch.zeros_like(coord_vec)
-        mask[np.unravel_index(torch.argmax(coord_vec.abs()), input_shape)] = 1.
+        mask[np.unravel_index(torch.argmax(coord_vec.abs()).cpu(), input_shape)] = 1.
 
         r_i = torch.clamp(pert, min=1e-4) * mask * coord_vec.sign()
 

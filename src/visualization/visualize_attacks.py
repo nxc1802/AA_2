@@ -12,6 +12,7 @@ import seaborn as sns
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from src.core import prepare_model_for_eval
+from src.core.utils import get_best_device
 from src.datasets.dataset_loader import get_sample_batch
 from src.models.model_factory import get_model, find_existing_checkpoint
 from src.attacks.baselines.pgd import PGDAttack
@@ -21,7 +22,7 @@ from src.attacks.optimization.pgd0 import PGD0Attack
 # ==============================================================================
 # CONFIGURABLE PARAMETERS & PATHS
 # ==============================================================================
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = get_best_device()
 RESULT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../result"))
 VIS_DIR = os.path.join(RESULT_DIR, "visualizations")
 LOG_DIR = os.path.join(RESULT_DIR, "logs")

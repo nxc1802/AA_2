@@ -171,7 +171,7 @@ class GSEAttack(Attack):
         result = x.clone()
         # tensor for saving best adversarial example so far
         result2 = x.clone()
-        best_l0 = torch.full((B,), torch.inf, device=self.device).type(x.type())
+        best_l0 = torch.full((B,), torch.inf, device=self.device, dtype=x.dtype)
 
         # section search
         for step in range(self.search_steps):

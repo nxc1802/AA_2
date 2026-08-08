@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.core.utils import get_best_device
+
 class IPFSAAttack:
     """Authentic Iterative Pixel Filtered Sparse Attack (IPFSA)."""
     def __init__(self, model, k=15, k_pixels=None, steps=25, steps_ig=None, alpha=4/255.0, device=None):
@@ -9,7 +11,7 @@ class IPFSAAttack:
         self.k = k_pixels if k_pixels is not None else k
         self.steps = steps_ig if steps_ig is not None else steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss()
 
     def attack(self, x, y):

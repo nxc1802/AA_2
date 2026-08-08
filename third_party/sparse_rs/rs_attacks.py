@@ -272,9 +272,9 @@ class RSAttack():
                 
                 x_best = x.clone()
                 n_pixels = h * w
-                b_all, be_all = torch.zeros([x.shape[0], eps]).long(), torch.zeros([x.shape[0], n_pixels - eps]).long()
+                b_all, be_all = torch.zeros([x.shape[0], eps], device=self.device).long(), torch.zeros([x.shape[0], n_pixels - eps], device=self.device).long()
                 for img in range(x.shape[0]):
-                    ind_all = torch.randperm(n_pixels)
+                    ind_all = torch.randperm(n_pixels, device=self.device)
                     ind_p = ind_all[:eps]
                     ind_np = ind_all[eps:]
                     x_best[img, :, ind_p // w, ind_p % w] = self.random_choice([c, eps]).clamp(0., 1.)

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class PGDAttack:
     def __init__(self, model: nn.Module, eps: float = 8/255.0, alpha: float = 2/255.0, steps: int = 20, device: torch.device = None):
@@ -8,7 +8,7 @@ class PGDAttack:
         self.eps = eps
         self.alpha = alpha
         self.steps = steps
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

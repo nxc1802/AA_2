@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from src.core.utils import get_best_device
+
 class JSMAAttack:
     """Batched High-Performance Jacobian-based Saliency Map Attack (JSMA)."""
     def __init__(self, model, k=15, theta=1.0, max_iter=25, device=None):
@@ -8,7 +10,7 @@ class JSMAAttack:
         self.k = k
         self.theta = theta
         self.max_iter = max_iter
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def attack(self, x, y):
         x = x.to(self.device)

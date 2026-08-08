@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from src.core.utils import get_best_device
+
 class GradientGuidanceAttack:
     """Authentic Gradient Guidance Sparse Attack."""
     def __init__(self, model, k=15, sparsity_budget=None, steps=25, alpha=4/255.0, device=None):
@@ -8,7 +10,7 @@ class GradientGuidanceAttack:
         self.k = sparsity_budget if sparsity_budget is not None else k
         self.steps = steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def attack(self, x, y):
         x = x.to(self.device)

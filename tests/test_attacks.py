@@ -9,7 +9,8 @@ from src.core import (
     compute_per_sample_ssim,
     compute_distortion_metrics,
     prepare_model_for_eval,
-    set_seed
+    set_seed,
+    get_best_device
 )
 from src.attacks.optimization.pgd0 import PGD0Attack
 from src.attacks.optimization.sparse_pgd import SparsePGDAttack
@@ -42,6 +43,13 @@ class DummyModel(nn.Module):
         return x.flatten(1)
 
 class TestAttacks(unittest.TestCase):
+    def get_test_inputs(self):
+        device = get_best_device()
+        model = prepare_model_for_eval(DummyModel(), device)
+        x = torch.rand(2, 3, 32, 32, device=device)
+        y = torch.tensor([0, 1], device=device)
+        return model, x, y
+
     def test_exact_spatial_topk_mask(self):
         scores = torch.rand(4, 1, 32, 32)
         k = 8
@@ -74,9 +82,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_pgd0_attack_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 5
         attacker = PGD0Attack(model, k=k, steps=5)
         x_adv = attacker.attack(x, y)
@@ -85,9 +91,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_spgd_attack_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 10
         attacker = SparsePGDAttack(model, sparsity_budget=k, steps=5)
         x_adv = attacker.attack(x, y)
@@ -96,9 +100,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_sparse_rs_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 6
         attacker = SparseRSAttack(model, k=k, steps=5)
         x_adv = attacker.attack(x, y)
@@ -107,9 +109,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_brusle_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 9
         attacker = BruSLeAttack(model, k=k, steps=5)
         x_adv = attacker.attack(x, y)
@@ -118,9 +118,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_pixle_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 4
         attacker = PixleAttack(model, k=k, steps=5)
         x_adv = attacker.attack(x, y)
@@ -129,9 +127,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_proposed_methods_budget(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         k = 8
         
         cpa = CooperativePixelsAttack(model, coalition_size=k, steps=5)
@@ -168,11 +164,12 @@ class TestAttacks(unittest.TestCase):
         self.assertEqual(res["succ_psnr_mean"], 32.5)
 
     def test_defenses_execution(self):
-        x = torch.rand(2, 3, 32, 32)
+        device = get_best_device()
+        x = torch.rand(2, 3, 32, 32, device=device)
         g_blur = GaussianBlurDefense()
         m_filt = MedianFilterDefense()
         jpeg = JPEGCompressionDefense()
-        tvm = TotalVariationMinimizationDefense(steps=2)
+        tvm = TotalVariationMinimizationDefense(steps=2, device=device)
 
         for d in [g_blur, m_filt, jpeg, tvm]:
             out = d.defend(x)
@@ -181,9 +178,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_onepixel_state_sync_and_queries(self):
         set_seed(42)
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         attacker = OnePixelAttack(model, k=1, max_iter=3, pop_size=5)
         x_adv = attacker.attack(x, y)
         self.assertEqual(x_adv.shape, x.shape)
@@ -192,9 +187,7 @@ class TestAttacks(unittest.TestCase):
 
     def test_homotopy_gradient_flow(self):
         from src.attacks.optimization.homotopy import HomotopyAttack
-        model = DummyModel()
-        x = torch.rand(2, 3, 32, 32)
-        y = torch.tensor([0, 1])
+        model, x, y = self.get_test_inputs()
         attacker = HomotopyAttack(model, k=5, steps=2)
         x_adv = attacker.attack(x, y)
         self.assertEqual(x_adv.shape, x.shape)

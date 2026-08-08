@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class SparseRSAttack:
     """
@@ -13,7 +13,7 @@ class SparseRSAttack:
         self.k = n_pixels if n_pixels is not None else k
         self.steps = n_queries if n_queries is not None else steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         x = x.to(self.device)

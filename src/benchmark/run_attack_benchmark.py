@@ -26,7 +26,10 @@ from src.core import (
     compute_per_sample_lpips,
     compute_distortion_metrics,
     prepare_model_for_eval,
-    set_seed
+    set_seed,
+    get_best_device,
+    synchronize_device,
+    get_device_name
 )
 from src.datasets.dataset_loader import get_dataloaders
 from src.models.model_factory import get_model, find_existing_checkpoint
@@ -81,7 +84,7 @@ except Exception as e:
 # ==============================================================================
 NUM_BENCHMARK_TEST_SAMPLES = 1000
 EVAL_BATCH_SIZE = 1024
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = get_best_device()
 RESULT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../result"))
 METRICS_DIR = os.path.join(RESULT_DIR, "metrics")
 LOG_DIR = os.path.join(RESULT_DIR, "logs")
@@ -219,7 +222,8 @@ def run_attack_benchmark_suite(
         "num_samples": n_eval,
         "use_official_adapters": use_official_adapters,
         "device": str(device),
-        "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+        "device_name": get_device_name(device),
+        "cuda_device_name": get_device_name(device),
         "sample_indices_md5": hashlib.md5(str(sampled_indices).encode()).hexdigest(),
     }
     with open(os.path.join(METRICS_DIR, f"{output_prefix}_metadata.json"), "w", encoding="utf-8") as f:
@@ -237,8 +241,7 @@ def run_attack_benchmark_suite(
     }
 
     for name, (attacker, source_label) in group_c_attacks.items():
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+        synchronize_device(device)
         t0 = time.time()
         
         all_l0s, all_l2s, all_linfs = [], [], []
@@ -256,12 +259,10 @@ def run_attack_benchmark_suite(
                 clean_preds = torch.argmax(model(x), dim=1)
             c_mask = (clean_preds == y)
 
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             t_att_start = time.time()
             x_adv = attacker.attack(x, y)
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
@@ -303,8 +304,7 @@ def run_attack_benchmark_suite(
             if lpips_per is not None:
                 all_lpipss.append(lpips_per)
 
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+        synchronize_device(device)
         dt = time.time() - t0
 
         c_mask_tensor = torch.cat(all_clean_masks)
@@ -391,8 +391,7 @@ def run_attack_benchmark_suite(
         if name == "CornerSearch":
             K_max = max(K_VALUES)
             attacker = factory(model, K_max, device)
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             t0 = time.time()
 
             all_l0s, all_l2s, all_linfs = [], [], []
@@ -410,12 +409,10 @@ def run_attack_benchmark_suite(
                     clean_preds = torch.argmax(model(x), dim=1)
                 c_mask = (clean_preds == y)
 
-                if device.type == "cuda":
-                    torch.cuda.synchronize()
+                synchronize_device(device)
                 t_att_start = time.time()
                 x_adv = attacker.attack(x, y)
-                if device.type == "cuda":
-                    torch.cuda.synchronize()
+                synchronize_device(device)
                 pure_attack_dt += (time.time() - t_att_start)
 
                 if hasattr(attacker, "last_steps"):
@@ -457,8 +454,7 @@ def run_attack_benchmark_suite(
                 if lpips_per is not None:
                     all_lpipss.append(lpips_per)
 
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             dt = time.time() - t0
 
             c_mask_tensor = torch.cat(all_clean_masks)
@@ -509,8 +505,7 @@ def run_attack_benchmark_suite(
         else:
             for K in K_VALUES:
                 attacker = factory(model, K, device)
-                if device.type == "cuda":
-                    torch.cuda.synchronize()
+                synchronize_device(device)
                 t0 = time.time()
 
                 all_l0s, all_l2s, all_linfs = [], [], []
@@ -528,12 +523,10 @@ def run_attack_benchmark_suite(
                         clean_preds = torch.argmax(model(x), dim=1)
                     c_mask = (clean_preds == y)
 
-                    if device.type == "cuda":
-                        torch.cuda.synchronize()
+                    synchronize_device(device)
                     t_att_start = time.time()
                     x_adv = attacker.attack(x, y)
-                    if device.type == "cuda":
-                        torch.cuda.synchronize()
+                    synchronize_device(device)
                     pure_attack_dt += (time.time() - t_att_start)
                     
                     if hasattr(attacker, "last_steps"):
@@ -575,8 +568,7 @@ def run_attack_benchmark_suite(
                     if lpips_per is not None:
                         all_lpipss.append(lpips_per)
 
-                if device.type == "cuda":
-                    torch.cuda.synchronize()
+                synchronize_device(device)
                 dt = time.time() - t0
 
                 c_mask_tensor = torch.cat(all_clean_masks)
@@ -650,8 +642,7 @@ def run_attack_benchmark_suite(
         }
 
     for name, (attacker, source_label) in group_b_attacks.items():
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+        synchronize_device(device)
         t0 = time.time()
         
         all_l0s, all_l2s, all_linfs = [], [], []
@@ -669,12 +660,10 @@ def run_attack_benchmark_suite(
                 clean_preds = torch.argmax(model(x), dim=1)
             c_mask = (clean_preds == y)
 
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             t_att_start = time.time()
             x_adv = attacker.attack(x, y)
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize_device(device)
             pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
@@ -714,8 +703,7 @@ def run_attack_benchmark_suite(
             if lpips_per is not None:
                 all_lpipss.append(lpips_per)
 
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+        synchronize_device(device)
         dt = time.time() - t0
 
         c_mask_tensor = torch.cat(all_clean_masks)

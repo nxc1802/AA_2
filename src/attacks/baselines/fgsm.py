@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 from src.core.types import AttackResult
 from src.core.projections import compute_spatial_l0
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class FGSMAttack:
     def __init__(self, model: nn.Module, eps: float = 8/255.0, device: torch.device = None):
         self.model = prepare_model_for_eval(model, device)
         self.eps = eps
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torch.nn as nn
-from src.core import compute_spatial_l0, set_seed
+from src.core import compute_spatial_l0, set_seed, get_best_device, prepare_model_for_eval
 from src.attacks.adapters import (
     SparseRSOfficialAdapter,
     CornerSearchOfficialAdapter,
@@ -27,9 +27,10 @@ class DummyModel(nn.Module):
 class TestOfficialAdapters(unittest.TestCase):
     def setUp(self):
         set_seed(42)
-        self.model = DummyModel()
-        self.x = torch.rand(2, 3, 32, 32)
-        self.y = torch.tensor([0, 1])
+        self.device = get_best_device()
+        self.model = prepare_model_for_eval(DummyModel(), self.device)
+        self.x = torch.rand(2, 3, 32, 32, device=self.device)
+        self.y = torch.tensor([0, 1], device=self.device)
 
     def test_sparse_rs_adapter(self):
         adapter = SparseRSOfficialAdapter(self.model, n_pixels=5, n_queries=10)

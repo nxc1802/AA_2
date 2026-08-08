@@ -4,7 +4,7 @@ import types
 import torch
 import torch.nn as nn
 from src.attacks.adapters.utils import scoped_sys_path
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 THIRD_PARTY_SIGMA_ZERO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../third_party/sigma_zero"))
 
@@ -40,7 +40,7 @@ class SigmaZeroOfficialAdapter:
         self.model = prepare_model_for_eval(model, device)
         self.k = k
         self.steps = steps
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         if not os.path.exists(THIRD_PARTY_SIGMA_ZERO):

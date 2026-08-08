@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.core.projections import project_l0, exact_spatial_topk_mask
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class HypergraphSparseAttack:
     """
@@ -18,7 +18,7 @@ class HypergraphSparseAttack:
         self.budget = budget
         self.steps = steps
         self.alpha = alpha
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
     def _construct_hypergraph_degree(self, images: torch.Tensor, labels: torch.Tensor):

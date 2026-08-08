@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 from src.core.projections import project_l0, exact_spatial_topk_mask
-from src.core.utils import prepare_model_for_eval
+from src.core.utils import prepare_model_for_eval, get_best_device
 
 class FeatureExtractorAdapter:
     """Flexible feature extractor adapter for diverse model backbones."""
@@ -55,7 +55,7 @@ class FeatureToMinimalSupportAttack:
         self.steps = steps
         self.alpha = alpha
         self.feature_weight = feature_weight
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else get_best_device()
         self.feature_adapter = FeatureExtractorAdapter(self.model, layer_name=layer_name)
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
 

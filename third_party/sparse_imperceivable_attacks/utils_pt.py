@@ -7,7 +7,7 @@ import numpy as np
 
 def get_logits(model, x_nat):
     device = next(model.parameters()).device
-    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).float().to(device)
+    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).contiguous().float().to(device)
     
     with torch.no_grad():
         output = model(x)
@@ -16,7 +16,7 @@ def get_logits(model, x_nat):
 
 def get_predictions(model, x_nat, y_nat):
     device = next(model.parameters()).device
-    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).float().to(device)
+    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).contiguous().float().to(device)
     y = torch.from_numpy(y_nat).to(device)
     with torch.no_grad():
         output = model(x)
@@ -25,7 +25,7 @@ def get_predictions(model, x_nat, y_nat):
 
 def get_predictions_and_gradients(model, x_nat, y_nat):
     device = next(model.parameters()).device
-    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).float().to(device)
+    x = torch.from_numpy(x_nat).permute(0, 3, 1, 2).contiguous().float().to(device)
     x.requires_grad_()
     y = torch.from_numpy(y_nat).to(device)
 

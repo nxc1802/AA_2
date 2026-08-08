@@ -127,5 +127,8 @@ class FeatureToMinimalSupportAttack:
                 steps_to_fool[newly_fooled] = step + 1
                 fooled_mask = fooled_mask | newly_fooled
 
-        self.last_steps = steps_to_fool.cpu().numpy().tolist()
+        steps_list = steps_to_fool.cpu().numpy().tolist()
+        self.last_steps = steps_list
+        self.last_queries = [int(s * 2 + 1) for s in steps_list]
+        self.last_grad_evals = [int(s) for s in steps_list]
         return best_adv

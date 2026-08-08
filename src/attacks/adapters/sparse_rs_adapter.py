@@ -18,8 +18,14 @@ class SparseRSOfficialAdapter:
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        if not os.path.exists(THIRD_PARTY_SPARSE_RS):
+            raise RuntimeError(f"Official Sparse-RS dependency directory not found at '{THIRD_PARTY_SPARSE_RS}'")
+
         with scoped_sys_path(THIRD_PARTY_SPARSE_RS):
-            from rs_attacks import RSAttack
+            try:
+                from rs_attacks import RSAttack
+            except ImportError as e:
+                raise RuntimeError(f"Failed to import official Sparse-RS implementation: {e}")
 
             def predict_fn(inputs):
                 with torch.no_grad():
@@ -39,6 +45,8 @@ class SparseRSOfficialAdapter:
             res = official_attacker.perturb(x, y)
             if isinstance(res, tuple):
                 qr, adv_x = res
-                self.last_steps = qr.cpu().numpy().tolist()
+                queries_list = qr.cpu().numpy().tolist()
+                self.last_steps = queries_list
+                self.last_queries = queries_list
                 return adv_x
             return res

@@ -179,5 +179,48 @@ class TestAttacks(unittest.TestCase):
             self.assertEqual(out.shape, x.shape)
             self.assertTrue((out >= 0.0).all().item() and (out <= 1.0).all().item())
 
+    def test_onepixel_state_sync_and_queries(self):
+        set_seed(42)
+        model = DummyModel()
+        x = torch.rand(2, 3, 32, 32)
+        y = torch.tensor([0, 1])
+        attacker = OnePixelAttack(model, k=1, max_iter=3, pop_size=5)
+        x_adv = attacker.attack(x, y)
+        self.assertEqual(x_adv.shape, x.shape)
+        self.assertTrue(hasattr(attacker, "last_queries"))
+        self.assertEqual(len(attacker.last_queries), 2)
+
+    def test_homotopy_gradient_flow(self):
+        from src.attacks.optimization.homotopy import HomotopyAttack
+        model = DummyModel()
+        x = torch.rand(2, 3, 32, 32)
+        y = torch.tensor([0, 1])
+        attacker = HomotopyAttack(model, k=5, steps=2)
+        x_adv = attacker.attack(x, y)
+        self.assertEqual(x_adv.shape, x.shape)
+
+    def test_stratified_sampling(self):
+        from src.benchmark.run_attack_benchmark import get_stratified_indices
+        class DummyDataset(torch.utils.data.Dataset):
+            def __init__(self):
+                self.targets = [i % 10 for i in range(100)]
+            def __len__(self):
+                return len(self.targets)
+            def __getitem__(self, idx):
+                return torch.zeros(3, 32, 32), self.targets[idx]
+
+        ds = DummyDataset()
+        indices = get_stratified_indices(ds, num_samples=20, seed=42)
+        self.assertEqual(len(indices), 20)
+        selected_targets = [ds.targets[i] for i in indices]
+        counts = {c: selected_targets.count(c) for c in range(10)}
+        for c in range(10):
+            self.assertEqual(counts[c], 2)
+
+    def test_invalid_checkpoint_raises_error(self):
+        from src.models.model_factory import get_model
+        with self.assertRaises(FileNotFoundError):
+            get_model("resnet18", checkpoint_path="/path/does/not/exist/non_existent_ckpt.pth")
+
 if __name__ == "__main__":
     unittest.main()

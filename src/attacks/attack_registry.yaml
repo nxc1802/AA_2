@@ -65,11 +65,11 @@ attacks:
 
   CornerSearch:
     name: "Corner Search Attack"
-    paper: "Corner Search for Sparse Adversarial Attacks"
-    year: 2020
-    venue: "ECCV"
+    paper: "Sparse and Imperceivable Adversarial Attacks"
+    year: 2019
+    venue: "ICCV"
     implementation: "official-adapter"
-    official_repo: "third_party/corner_search"
+    official_repo: "third_party/sparse_imperceivable_attacks"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "black-box"
@@ -86,31 +86,31 @@ attacks:
 
   PGD0:
     name: "PGD 0-norm Attack"
-    paper: "Sparse Adversarial Attacks with L0-Norm Constrained Optimization"
-    year: 2020
-    venue: "NeurIPS"
+    paper: "Sparse and Imperceivable Adversarial Attacks"
+    year: 2019
+    venue: "ICCV"
     implementation: "official-adapter"
-    official_repo: "third_party/pgd0"
+    official_repo: "third_party/sparse_imperceivable_attacks"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
 
   Sparse-PGD:
     name: "Sparse Projected Gradient Descent"
-    paper: "Sparse Adversarial Attacks via Top-K Projection"
-    year: 2022
-    venue: "AAAI"
+    paper: "Towards Efficient Training and Evaluation of Robust Models against L0 Bounded Adversarial Perturbations"
+    year: 2024
+    venue: "ICML"
     implementation: "official-adapter"
-    official_repo: "third_party/sparse_pgd"
+    official_repo: "third_party/spgd"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
 
   Sparse-RS:
     name: "Sparse Random Search"
-    paper: "Efficient Sparse Black-box Adversarial Attacks"
-    year: 2020
-    venue: "ECCV"
+    paper: "Sparse-RS: A Versatile Framework for Query-Efficient Sparse Black-Box Adversarial Attacks"
+    year: 2022
+    venue: "AAAI"
     implementation: "official-adapter"
     official_repo: "third_party/sparse_rs"
     constraint: "L0"
@@ -119,9 +119,9 @@ attacks:
 
   BruSLe:
     name: "BruSLe Sparse Black-box Attack"
-    paper: "Brush and Select: Sparse Black-box Adversarial Attack"
-    year: 2022
-    venue: "CVPR"
+    paper: "BruSLeAttack: A Query-Efficient Score-Based Black-Box Sparse Adversarial Attack"
+    year: 2024
+    venue: "ICLR"
     implementation: "custom-reimplementation"
     constraint: "L0"
     budget_mode: "K"
@@ -199,8 +199,8 @@ attacks:
   SigmaZero:
     name: "Sigma-Zero Attack"
     paper: "Sigma-Zero: Minimum-support Sparse Adversarial Attack"
-    year: 2024
-    venue: "ICML"
+    year: 2025
+    venue: "ICLR"
     implementation: "official-adapter"
     official_repo: "third_party/sigma_zero"
     constraint: "Minimal Support"
@@ -213,16 +213,16 @@ attacks:
     year: 2021
     venue: "NeurIPS"
     implementation: "official-adapter"
-    official_repo: "third_party/homotopy"
+    official_repo: "third_party/sparseadv_homotopy"
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"
 
   GSE:
     name: "Group Sparse Estimation Attack"
-    paper: "Group Sparse Adversarial Perturbations"
-    year: 2022
-    venue: "IJCAI"
+    paper: "GSE: Group-Wise Sparse and Explainable Adversarial Attacks"
+    year: 2025
+    venue: "ICLR"
     implementation: "official-adapter"
     official_repo: "third_party/gse"
     constraint: "Minimal Support"

@@ -1,1101 +1,1806 @@
-Mình đã đọc cấu trúc repo, benchmark engine, model/dataset pipeline, metric, test, adapter third-party, các proposed attack và cả kết quả đang commit trong result_marimo.
+Mình đã đọc trực tiếp repo `nxc1802/AA_2`, gồm benchmark runner, core metrics/projection, dataset/model pipeline, các attack custom, official adapters, defense, tests, proposed methods và cả các kết quả đang commit trong `result_marimo`.
 
-Kết luận tổng quan
+## Kết luận tổng thể
 
-Repo AA_2 đã có nền tảng khá tốt cho một research codebase về Sparse Adversarial Attack, đặc biệt ở cách chia module và chuẩn hóa spatial L_0. Tuy nhiên, ở trạng thái hiện tại mình chưa khuyên dùng các bảng kết quả trong repo làm kết quả paper.
+**Repo có kiến trúc nghiên cứu khá tốt, nhưng hiện tại chưa đủ độ tin cậy khoa học để lấy các con số benchmark làm kết quả chính cho paper.**
 
-Vấn đề chính không phải thiếu attack. Ngược lại, repo đang có quá nhiều attack. Vấn đề chính là:
+Nếu chấm riêng:
 
-1. benchmark protocol chưa đủ chặt để so sánh paper-level;
-2. metric distortion đang bị bias bởi failed attacks;
-3. nhãn "Official" hiện chưa thực sự đồng nghĩa tất cả method dùng official implementation;
-4. black-box chưa đo query count;
-5. kết quả commit hiện tại thực chất là mức smoke test khoảng 10 ảnh;
-6. defense pipeline hiện chưa runnable;
-7. một số proposed method có khoảng cách khá lớn giữa tên/concept mô tả và thuật toán thực sự được code;
-8. reproducibility chưa đủ: dependency, config, checkpoint revision, sample indices, multiple seeds.
+| Hạng mục                                  |   Đánh giá |
+| ----------------------------------------- | ---------: |
+| Cấu trúc project                          |   **8/10** |
+| Thiết kế benchmark A/B/C                  |   **8/10** |
+| Metric pipeline                           | **7.5/10** |
+| Reproducibility hiện tại                  |   **5/10** |
+| Software engineering                      |   **6/10** |
+| Độ faithful của baseline custom           |   **3/10** |
+| Official baseline integration             |   **5/10** |
+| Proposed-method implementation vs ý tưởng | **2.5/10** |
+| Defense evaluation                        |   **4/10** |
+| Mức sẵn sàng để viết paper                |  **~4/10** |
 
-Nếu chấm trạng thái hiện tại:
+Điểm quan trọng nhất là: **framework tốt hơn algorithm implementation**. Nói cách khác, bộ khung của repo có thể giữ lại phần lớn, nhưng một số attack và toàn bộ 4 proposed method cần được xem xét lại trước khi chạy benchmark lớn.
 
-Thành phần	Đánh giá
-Kiến trúc source	8/10
-Phạm vi attack benchmark	9/10
-Spatial L_0 implementation	8.5/10
-Benchmark fairness	5/10
-Reproducibility	4/10
-Defense pipeline	2/10
-Proposed-method maturity	4–6/10 tùy method
-Paper-ready	~4.5/10
+---
 
-Điều đáng mừng là phần lớn điểm yếu nằm ở protocol và engineering, tức sửa được mà không cần viết lại toàn repo.
+# 1. Kiến trúc repo: đây là phần làm tốt
 
-⸻
+Repo đã được chia đúng kiểu một research codebase:
 
-1. Kiến trúc repo: đây là điểm mạnh
+* `src/attacks/`
+* `src/benchmark/`
+* `src/core/`
+* `src/datasets/`
+* `src/models/`
+* `src/defenses/`
+* `src/reports/`
+* `src/visualization/`
+* `tests/`
+* `third_party/`
 
-Repo được tổ chức tương đối đúng kiểu research project:
+Ngoài ra còn có registry attack, provenance của third-party, kết quả benchmark và notebook. Đây là hướng tổ chức tốt hơn rất nhiều so với việc nhét toàn bộ experiment vào notebook.
 
-src/
-├── attacks/
-│   ├── baselines/
-│   ├── classical/
-│   ├── optimization/
-│   ├── attention_attribution/
-│   ├── frequency/
-│   ├── blackbox/
-│   ├── proposed/
-│   └── adapters/
-├── benchmark/
-├── core/
-├── datasets/
-├── models/
-├── reports/
-└── visualization/
-tests/
-third_party/
-docs/
-notebook/
-result_marimo/
+Mình đặc biệt đánh giá tốt cách repo tách attack thành:
 
-Danh mục attack hiện khá rộng: FGSM/BIM/PGD; JSMA, OnePixel, CornerSearch, SparseFool; PGD0, Sparse-PGD, Sigma-Zero, GSE, Homotopy, SAIF; Sparse-RS, BruSLe, Pixle; cùng CPA/FCSA/FMSA/HSA proposed.
+**Group A — explicit K-budget**
 
-Việc tách:
+→ chạy trực tiếp ở nhiều mức `K`.
 
-* implementation riêng;
-* official adapter riêng;
-* benchmark engine riêng;
-* core metric/projection riêng;
-* report/visualization riêng;
+**Group B — minimum-support**
 
-là hướng đúng.
+→ attack một lần rồi đánh giá cumulative `ASR@K`.
 
-Đặc biệt mình đánh giá cao việc không nhét toàn bộ experiment vào một notebook khổng lồ.
+**Group C — non-pixel-K**
 
-⸻
+→ FGSM/BIM/PGD/SFA, không ép vào cùng một khung K giả tạo.
 
-2. Phần L_0 hiện được làm khá đúng
+Đây là taxonomy hợp lý về mặt experimental design.
 
-Một trong những phần tốt nhất của repo là:
+---
 
-channel_max = delta.abs().max(dim=1).values
-l0_per_sample = (channel_max > eps).flatten(1).sum(dim=1)
+# 2. Core (L_0) implementation là một trong những phần chắc nhất
 
-Tức là một pixel (h,w) được tính là modified nếu ít nhất một trong 3 channel thay đổi.
+Repo định nghĩa **spatial (L_0)** theo pixel thay vì từng scalar RGB: chỉ cần một channel tại pixel thay đổi thì pixel đó được tính là 1.
 
-Như vậy trên CIFAR-10:
+Đồng thời có:
 
-L_0 \in [0,1024]
+* `exact_spatial_topk_mask`
+* `project_l0`
+* spatial score theo norm giữa các channels
 
-chứ không phải [0,3072].
+Đây là lựa chọn đúng cho benchmark sparse attack trên ảnh. Test cũng kiểm tra projection thực sự thỏa `L0 <= K`.
 
-Đây là định nghĩa phù hợp cho pixel-sparse attack.
+Điểm này nên **giữ nguyên làm convention chính của paper**, sau đó ghi rõ:
 
-Ngoài ra:
+[
+|\delta|_{0,\text{pixel}}
+=========================
 
-exact_spatial_topk_mask(...)
-project_l0(...)
+\sum_{h,w}
+\mathbf 1
+\left[
+\max_c|\delta_{c,h,w}|>\tau
+\right].
+]
 
-đã giải quyết được vấn đề threshold tie khiến số pixel đôi lúc vượt quá K.
+Nó tránh được vấn đề một số repo khác tính RGB components, khiến cùng “(L_0=30)” nhưng ý nghĩa khác nhau.
 
-Một edge case nhỏ
+---
 
-exact_spatial_topk_mask() hiện có:
+# 3. Metric benchmark cũng có nền tảng tốt
 
-k_bounded = min(max(1, k), num_pixels)
+Runner hiện tính:
 
-Nghĩa là:
+* Clean Accuracy
+* Robust Accuracy
+* Accuracy Drop
+* Conditional ASR
+* spatial (L_0)
+* (L_2)
+* (L_\infty)
+* PSNR
+* SSIM
+* LPIPS
+* iterations
+* runtime
 
-K=0 → K=1
+Quan trọng hơn, `Conditional ASR` được tính trên những ảnh **clean model ban đầu phân loại đúng**:
 
-Nên hàm chưa biểu diễn được perturbation budget bằng 0.
+[
+ASR_{\text{cond}}
+=================
 
-Không ảnh hưởng K sweep hiện tại vì bạn bắt đầu từ 1, nhưng nên sửa:
-
-if k <= 0:
-    return torch.zeros(..., dtype=torch.bool)
-
-⸻
-
-3. Cách chia Group A/B/C về cơ bản là hợp lý
-
-Benchmark hiện chia:
-
-Group A — Explicit pixel budget
-
-Sweep:
-
-K=\{1,2,4,8,16,32,64,128\}
-
-với các attack có thể trực tiếp nhận K.
-
-Đây là cách đúng để tạo:
-
-ASR(K)
-
-và:
-
-RobustAccuracy(K)
-
-cho constrained attack.
-
-⸻
-
-Group B — Minimal-support attacks
-
-Ý tưởng hiện tại là:
-
-1. chạy attack một lần để tìm perturbation;
-2. đo L_0(x_{adv}-x);
-3. tại mỗi K tính:
-
-ASR@K =
 \frac{
-\#\{x:\text{clean correct, attack success, }L_0\le K\}
+#{f(x)=y,\ f(x_{adv})\ne y}
 }{
-\#\{\text{clean correct}\}
-}
+#{f(x)=y}
+}.
+]
 
-Đây chính là cumulative ASR@K mà trước đó chúng ta đã thảo luận.
+Đây là cách đúng hơn việc lấy tất cả test samples làm mẫu số.
 
-Về concept, cách này tốt.
+Phần distortion cũng có cả **all-sample** và **success-conditioned**, đây là thiết kế tốt. Với paper sparse attack, mình khuyên report distortion chính trên successful attacks, vì nếu attack fail và trả ảnh gần nguyên bản thì average distortion trên tất cả ảnh sẽ vô tình làm method trông “đẹp” hơn.
 
-⸻
+---
 
-Group C — Dense/non-pixel-budget
+# 4. Vấn đề lớn nhất: nhiều baseline custom không phải implementation faithful của paper
 
-FGSM/BIM/PGD/SFA được tách khỏi K sweep.
+Đây là vấn đề P0.
 
-Cũng hợp lý vì không nên cố ép dense L_\infty attack vào cùng trục K.
+Repo hiện có hai lớp:
 
-⸻
+1. custom reimplementation;
+2. official adapter.
 
-4. P0: metric distortion hiện đang bị tính sai về mặt nghiên cứu
+Nhưng **default benchmark lại chạy custom reimplementation**, vì CLI mặc định `use_official=False`.
 
-Đây là lỗi quan trọng nhất mình thấy.
+Điều đó rất nguy hiểm nếu bảng trong paper ghi đơn giản:
 
-Benchmark hiện cộng:
+> Sparse-RS
+> CornerSearch
+> SparseFool
+> Sigma-Zero
+> BruSLe
+> GSE
 
-total_l0 += l0_per.sum()
-total_l2 += ...
-total_psnr += ...
-total_ssim += ...
+Reviewer mặc nhiên hiểu rằng đó là phương pháp tương ứng với paper gốc.
 
-trên tất cả ảnh.
+Trong repo hiện tại, nhiều cái thực chất chỉ là **inspired/proxy versions**.
 
-Sau đó:
+---
 
-Avg L0 = total_l0 / total_count
-PSNR = total_psnr / total_count
-...
+## 4.1 Sparse-RS custom
 
-Giả sử attack 10 ảnh:
+Code hiện tại mỗi iteration:
 
-* thành công 2 ảnh với L_0=10;
-* thất bại 8 ảnh và trả lại ảnh gốc với L_0=0.
+* random K coordinates;
+* random ±α;
+* tạo candidate từ clean image;
+* giữ candidate nếu CE loss tăng.
 
-Repo báo:
+Đây đúng là một **random-search sparse attack**, nhưng quá đơn giản để gọi là Sparse-RS faithful.
 
-AvgL_0 = \frac{10+10}{10}=2
+Paper Sparse-RS là framework score-based query-efficient được thiết kế riêng cho (L_0), patch, frame và có cơ chế random-search có cấu trúc. Paper chính thức là AAAI 2022. ([AAAI][1])
 
-Trong khi perturbation thành công thực sự là:
+### Đề xuất
 
-AvgL_{0,\ success}=10.
+Custom này đổi tên thành:
 
-PSNR/SSIM còn bị bias mạnh hơn vì failed samples trả ảnh gốc sẽ có:
+> `RandomSparseSearch` hoặc `SparseRS-inspired`
 
-PSNR = 100
-SSIM = 1
-LPIPS ≈ 0
+và **baseline Sparse-RS trong bảng paper phải chạy official implementation**.
 
-compute_per_sample_psnr() thực tế chủ động gán ảnh giống hệt nhau thành 100 dB.
+---
 
-Đây là lý do một số kết quả nhìn “quá đẹp”
+# 5. CornerSearch custom vi phạm cả threat model
 
-Ví dụ Sparse-RS ở K rất nhỏ có thể:
+Đây là lỗi nghiêm trọng nhất ở Group A.
 
-* ASR > 0;
-* nhưng Avg L_0 cực thấp;
-* PSNR rất cao.
+Custom CornerSearch hiện gọi:
 
-Không nhất thiết vì attack tạo perturbation cực đẹp, mà do các ảnh thất bại với L_0=0 kéo average xuống.
+```python
+loss.backward()
+grad_mag = x_adv.grad...
+```
 
-Nên báo cả hai
+sau đó dùng gradient để chọn pixel.
 
-Mình khuyên đổi thành:
+Trong khi CornerSearch gốc là **black-box attack**. Paper ICCV 2019 nói rõ phương pháp hoạt động trong black-box scenario chỉ thông qua output classifier. ([Open Access CVF][2])
 
-All-sample metrics
-    Avg L0 all
-    Avg L2 all
-    ...
-Successful-only metrics
-    Success Avg L0
-    Success Median L0
-    Success Avg L∞
-    Success PSNR
-    Success SSIM
-    Success LPIPS
+Vậy nếu bảng của bạn ghi:
 
-Trong paper, distortion chính nên là success-conditioned.
+| Method       | Threat model |
+| ------------ | ------------ |
+| CornerSearch | Black-box    |
 
-⸻
+nhưng code thực tế sử dụng gradient, thì kết quả **không hợp lệ**.
 
-5. Group B còn bị lỗi metric này nặng hơn
+Custom method hiện tại về bản chất gần:
 
-Trong Group B có:
+> greedy gradient-guided corner perturbation
 
-sub_mask = (l0_arr <= K)
+hơn là CornerSearch.
 
-rồi tính:
+### Cần làm
 
-PSNR = psnr_arr[sub_mask].mean()
-SSIM = ...
-Avg L0 = ...
+**Không dùng `CornerSearchAttack` custom để report baseline CornerSearch.**
 
-Nhưng failed attack trả ảnh gốc:
+Hoặc đổi tên rõ thành:
 
-L_0=0
+> `GradientCornerGreedy`
 
-vẫn thỏa:
+---
 
-0\le K.
+# 6. Official CornerSearch cũng đang bị làm yếu bất thường
 
-Nên failed samples được tính vào quality metric.
+Adapter official hiện tạo:
 
-Phải đổi thành
+```python
+'n_iter': min(self.max_iter, 5)
+'n_max': min(max(1, self.k), 5)
+```
 
-success_at_k = fooled_arr & (l0_arr <= K)
+Tức là dù:
 
-và quality:
+[
+K=32,64,128
+]
 
-quality_mask = success_at_k
+thì một vài tham số quan trọng vẫn bị cap xuống **5**.
 
-không phải chỉ:
+Trong paper CornerSearch, Croce & Hein dùng chẳng hạn `Niter=1000` trong benchmark gốc. ([Open Access CVF][3])
 
-l0 <= K
+Vì vậy adapter hiện tại tuy gọi là `official-adapter` nhưng **không phải official configuration**.
 
-Đây là P0 trước khi chạy full benchmark.
+Đây cần sửa trước benchmark.
 
-⸻
+---
 
-6. Conditional ASR hiện lại được tính đúng
+# 7. SparseFool custom không phải SparseFool
 
-Điểm này repo làm tốt:
+Custom SparseFool hiện chủ yếu:
 
-adv_succ += (c_mask & (~r_mask)).sum()
-asr = adv_succ / clean_correct
+1. lấy margin gradient;
+2. top-K gradient magnitude;
+3. sign update;
+4. lặp lại.
 
-Tức:
+SparseFool gốc là một **geometry-inspired sparse attack**, dựa trên local linearization của decision boundary và projection lên boundary. CVPR 2019 mô tả rõ yếu tố hình học này. ([Open Access CVF][4])
 
-ASR =
-P(f(x_{adv})\ne y\mid f(x)=y)
+Vì vậy:
 
-chứ không tính những ảnh model vốn đã classify sai là attack success.
+> code hiện tại = DeepFool-inspired top-K gradient heuristic
 
-Đây là metric mình khuyên giữ.
+chứ chưa phải SparseFool.
 
-Nên rename cột rõ hơn thành:
+Một vấn đề nữa là support không được project toàn cục sau mỗi step. Nếu top-K thay đổi qua các iteration, tổng số pixel thay đổi có thể tăng rất nhiều.
 
-Conditional ASR (%)
+---
 
-thay vì generic:
+# 8. Sigma-Zero custom sai bản chất khá rõ
 
-ASR (%)
+File custom gọi:
 
-⸻
+> `SigmaZero Attack (ICLR 2025)`
 
-7. Kết quả đang commit chưa có giá trị thống kê cho paper
+nhưng thực tế algorithm là:
 
-Trong main của benchmark:
+* EMA gradient;
+* gradient magnitude;
+* top-K;
+* sparse sign update.
 
-num_samples = ... else 10
+Trong khi σ-zero thật sử dụng:
 
-tức chạy script không truyền tham số thì chỉ benchmark 10 ảnh.
+* differentiable approximation của (L_0);
+* gradient optimization;
+* adaptive/dynamic thresholding;
+* tìm adversarial example với minimum support.
 
-Report hiện tại cũng có các ASR như:
+Official repo cũng ghi rõ paper được accept **ICLR 2025**. ([GitHub][5])
 
-0%
-10%
-20%
-30%
-...
-100%
+Do đó custom `SigmaZeroAttack` hiện tại không nên mang tên Sigma-Zero trong bảng benchmark.
 
-và Clean Acc = 100% liên tục, hoàn toàn phù hợp với việc đang chạy tập 10 ảnh.
+Điểm hay là repo thực sự đã vendor code Sigma-Zero và có `sigma_zero_attack.py`.
 
-Ví dụ hiện có:
+=> **hãy dùng code đó làm baseline chính**.
 
-OnePixel K=1 → 10%
-K=2 → 30%
-...
-Sparse-PGD K=4 → 60%
+---
 
-Nhưng với n=10:
+# 9. Có inconsistency metadata của Sigma-Zero
 
-Một ảnh = 10 percentage points.
+Trong các phần repo hiện có sự không thống nhất về venue/year của Sigma-Zero.
 
-Không thể dùng chúng để kết luận:
+Adapter ghi:
 
-“Attack A mạnh hơn Attack B.”
+> ICLR 2025
 
-Smoke test: tốt.
+và official project cũng xác nhận ICLR 2025.  ([GitHub][5])
 
-Scientific result: chưa.
+Registry cần thống nhất theo citation cuối cùng:
 
-⸻
+> Cinà et al., σ-zero, ICLR 2025.
 
-8. Cách chọn sample cũng chưa tốt
+Việc này nhỏ về code nhưng quan trọng cho paper bibliography.
 
-Benchmark dùng:
+---
 
-Subset(test_ds, range(num_samples))
+# 10. Homotopy custom có một bug toán học đáng chú ý
 
-tức lấy:
+Trong `HomotopyAttack`, repo tạo:
 
-ảnh 0 ... ảnh N-1
-
-Không random và cũng không stratify.
-
-Đối với final benchmark, nên tạo một index set cố định:
-
-benchmark_indices_seed42.json
-
-Ví dụ:
-
-* CIFAR10 test = 10,000;
-* evaluate final toàn 10,000 nếu compute cho phép;
-* hoặc development = 1,000 stratified fixed images;
-* tất cả attack dùng chính xác cùng sample IDs.
-
-Quan trọng hơn nữa: lưu riêng:
-
-clean_correct_indices
-
-để mọi attack có cùng denominator cho conditional ASR.
-
-⸻
-
-9. "Official adapters" hiện hơi gây hiểu nhầm
-
-Đây là vấn đề mình nghĩ reviewer/reproducer sẽ quan tâm.
-
-Ngay cả khi:
-
-use_official_adapters=True
-
-Group A vẫn dùng custom implementation cho khá nhiều method.
-
-Ví dụ:
-
-"CornerSearch": CornerSearchAttack(...)
-
-dù repo đã import:
-
-CornerSearchOfficialAdapter
-
-Tương tự JSMA, OnePixel, SAIF, BruSLe, IPFSA… vẫn là implementation nội bộ.
-
-Nên log:
-
->>> Running Group A with Official Author Adapters
-
-hiện tại hơi quá mạnh.
-
-Mình khuyên mỗi result row có:
-
-Implementation
-Source
-Source commit
-Official
-Modified
-Hyperparameter profile
-
-Ví dụ:
-
-Attack	Implementation
-PGD0	official-adapter
-Sparse-RS	official-adapter
-CornerSearch	custom-reimplementation
-JSMA	custom-reimplementation
-Proposed	ours
-
-Như vậy minh bạch hơn rất nhiều.
-
-⸻
-
-10. Official PGD0 adapter có vấn đề fairness về runtime
-
-PGD0 official wrapper làm:
-
-GPU tensor
-→ CPU
-→ NumPy NHWC
-→ official code
-→ NumPy
-→ GPU tensor
-
-Trong khi nhiều proposed attack chạy native PyTorch CUDA.
-
-Nếu dùng:
-
-Time/Img
-
-để nói proposed nhanh hơn PGD0 thì không hoàn toàn fair.
-
-Runtime đang đo:
-
-* algorithm;
-* Python overhead;
-* CPU/GPU transfers;
-* implementation quality.
-
-Nên paper báo:
-
-wall-clock runtime
-
-nhưng không dùng nó một mình để kết luận computational efficiency.
-
-Thêm:
-
-gradient evaluations
-forward passes
-backward passes
-queries
-
-sẽ tốt hơn.
-
-⸻
-
-11. Black-box benchmark đang thiếu metric quan trọng nhất: Query Count
-
-Trong research plan, repo đã xác định đúng rằng black-box cần:
-
-Query Number
-
-Nhưng benchmark engine hiện chỉ output:
-
-Avg Iterations
-Time/Img
-
-không có:
-
-Queries
-Queries-to-success
-Median queries
-ASR@query-budget
-
-Đối với:
-
-* Sparse-RS;
-* OnePixel;
-* BruSLe;
-* Pixle;
-
-đây là thiếu sót lớn.
-
-Một Sparse-RS 90% ASR bằng 10,000 query và attack khác 85% bằng 500 query không thể xem là so sánh đơn giản 90 vs 85.
-
-Nên có
-
-ASR(Q)
-
-với:
-
-Q = 100
-500
-1,000
-5,000
-10,000
-
-hoặc query budget phù hợp với original papers.
-
-⸻
-
-12. Stochastic attacks cần nhiều seed
-
-Hiện:
-
-set_seed(seed)
-
-được gọi một lần và seed mặc định là 42.
-
-Reproducibility như vậy tốt cho một run.
-
-Nhưng với:
-
-* OnePixel;
-* Sparse-RS;
-* BruSLe;
-* các random-start optimizer;
-
-paper nên chạy ít nhất:
-
-3\text{–}5\ seeds
-
-và báo:
-
-mean\pm std
-
-hoặc median/IQR cho runtime/query.
-
-⸻
-
-13. Model training có một lỗi augmentation khá đáng chú ý
-
-dataset_loader đã đưa augmentation vào training dataset:
-
-RandomCrop(...)
-RandomHorizontalFlip()
-ToTensor()
-
-Sau đó train_clean_resnet18() lại cache toàn training dataset bằng cách iterate dataset đó.
-
-Tức mỗi image bị:
-
-RandomCrop + Flip
-
-một lần trước khi cache.
-
-Sau đó trong training loop lại áp:
-
-train_aug = RandomCrop + RandomHorizontalFlip
-
-mỗi epoch.
-
-Nói cách khác:
-
-Original
-   ↓
-Random augmentation #1
-   ↓
-CACHE vào VRAM
-   ↓
-Random augmentation #2 mỗi epoch
-
-Đây không phải pipeline CIFAR training thông thường.
-
-Nên đổi
-
-Cache:
-
-ToTensor only
-
-rồi mỗi epoch:
-
-RandomCrop + Flip
-
-một lần.
-
-Vừa đúng protocol hơn vừa dễ reproduce.
-
-⸻
-
-14. Model checkpoint chưa được pin immutable
-
-find_existing_checkpoint() ưu tiên download từ:
-
-Cuong2004/AA
-models/resnet18_cifar10_best.pth
-
-trên Hugging Face.
-
-Vấn đề là cùng path này trong tương lai có thể chứa checkpoint khác.
-
-Experiment hôm nay và 3 tuần sau có thể silently sử dụng model khác.
-
-Paper artifact nên lưu:
-
-checkpoint SHA256
-HF revision / commit
-training seed
-best epoch
-clean accuracy
-dataset split hash
-
-⸻
-
-15. Requirements hiện chưa đủ để clone-and-run
-
-requirements.txt hiện chỉ có các package cơ bản như torch, torchvision, numpy, scipy, pandas…
-
-Nhưng source còn import:
-
-datasets
-huggingface_hub
-scikit-learn
-lpips
-
-và notebook/tooling còn có dependency khác.
-
-Tức:
-
-pip install -r requirements.txt
-python ...
-
-không đảm bảo chạy.
-
-Đây là P0 cho reproducibility.
-
-Ngoài ra dùng:
-
-torch>=2.0
-numpy>=...
-
-quá rộng cho paper artifact.
-
-Nên có ít nhất:
-
-requirements.txt
-requirements-lock.txt
-
-hoặc conda environment pinned.
-
-⸻
-
-16. Root repo đang thiếu README quan trọng
-
-Top-level hiện có:
-
-docs/
-notebook/
-src/
-tests/
-third_party/
-...
-
-nhưng không có README ở root.
-
-Đối với research repository, README cần trả lời ngay:
-
-Paper là gì?
-Benchmark protocol là gì?
-Cài thế nào?
-Checkpoint ở đâu?
-Chạy smoke test thế nào?
-Chạy final benchmark thế nào?
-Official implementation nào?
-Output nằm ở đâu?
-
-Hiện kiến thức này bị phân tán trong docs/.
-
-⸻
-
-17. Third-party directory tốt về reproducibility nhưng cần quản lý provenance
-
-Một điểm tốt:
-
-Bạn đã vendor code của nhiều official implementation vào third_party/.
-
-Điều này tránh upstream repo thay đổi.
-
-Nhưng hiện third_party/ khá lớn, có:
-
-* source code;
-* checkpoint;
-* PDF;
-* image;
-* TensorFlow checkpoint;
-* model weights.
-
-Nên thêm:
-
-THIRD_PARTY.md
-
-với:
-
-Method	Original repo	Commit SHA	License	Modifications
-
-Đặc biệt quan trọng trước khi public code kèm paper.
-
-⸻
-
-18. Test suite: hướng đúng nhưng chưa test scientific correctness
-
-Hiện test khá tốt ở mức contract:
-
-* exact top-k;
-* L_0\le K;
-* output shapes;
-* proposed attacks respect K;
-* PSNR/SSIM shapes.
-
-Official adapter tests cũng đã xuất hiện.
-
-Nhưng đây chủ yếu là:
-
-“code chạy và không vượt K.”
-
-Chưa chứng minh:
-
-“algorithm được implement đúng.”
-
-Nên thêm regression tests kiểu:
-
-same seed → same results
-successful adversarial:
-    clean_pred == y
-    adv_pred != y
-    L0 <= K
-failed adversarial:
-    success flag == False
-ASR denominator test
-cumulative ASR@K monotonic test
-custom-vs-official sanity test
-query counter test
-metric successful-only test
-
-⸻
-
-19. Đánh giá riêng các Proposed Methods
-
-Đây là phần mình thấy cần đặc biệt thận trọng.
-
-CPA
-
-Implementation hiện tại tính:
-
-grad_mag
-local_coop = avg_pool_3x3(grad_mag)
-score = grad_mag + λ * local_coop
-
-rồi top-K.
-
-Về toán học nó gần với:
-
-gradient saliency + local spatial smoothing
-
-hơn là thực sự tính cooperative interaction giữa pixels.
-
-Nếu paper nói:
-
-“modeling cooperative pixel coalitions”
-
-reviewer hoàn toàn có thể hỏi:
-
-Coalition interaction nằm ở đâu?
-
-Ablation bắt buộc
-
-grad only
-grad + 3×3 average
-grad + Gaussian smoothing
-CPA
-
-Nếu CPA không khác đáng kể các smoothing baseline thì novelty yếu.
-
-⸻
-
-20. FCSA còn rõ hơn về mismatch tên–thuật toán
-
-FCSA hiện:
-
-grad_mean = abs(grad).mean(channel)
-grad_max  = abs(grad).max(channel)
-coalition_score = grad_mean * grad_max
-
-Đây là một pixel saliency score kết hợp thống kê các RGB channels.
-
-Nó không thực sự evaluate joint contribution của một coalition S theo dạng:
-
-F(S)-\sum_iF(i)
-
-hay Shapley/interaction score nào.
-
-Tên:
-
-Functional Coalition Sparse Attack
-
-hiện mạnh hơn mathematical mechanism thực tế.
-
-Nếu chọn FCSA làm proposed chính, mình nghĩ cần redesign đáng kể.
-
-⸻
-
-21. HSA có vấn đề claim lớn nhất
-
-Docstring nói:
-
-constructs a hypergraph, nodes = pixels, hyperedges = receptive fields, minimum coalition search…
-
-Nhưng implementation thực tế là:
-
-grad_mag
-+
-avg_pool_3x3(grad_mag)
-+
-avg_pool_5x5(grad_mag)
-
-rồi top-K.
-
-Không có:
-
-* hypergraph adjacency/incidence matrix;
-* actual hyperedges;
-* hyperedge weights;
-* message passing;
-* minimum coalition algorithm;
-* hypergraph optimization.
-
-Về bản chất hiện tại mình sẽ gọi nó:
-
-Multi-scale Neighborhood Gradient Saliency Attack
-
-hợp lý hơn là Hypergraph Sparse Attack.
-
-Nếu submit paper với claim “hypergraph”
-
-Đây có thể thành một reviewer objection rất mạnh.
-
-⸻
-
-22. FMSA là proposed candidate mình thấy đáng phát triển nhất
-
-FMSA có concept thực sự khác:
-
-1. hook representation ở layer4;
-2. lấy clean feature z(x);
-3. optimize để tăng:
-
-\|z(x_{adv})-z(x)\|_2^2;
-
-4. dùng gradient để chọn sparse support;
-5. hard-project về L_0\le K.
-
-Concept này có câu chuyện nghiên cứu rõ hơn CPA/FCSA/HSA hiện tại.
-
-Nhưng vẫn có 3 điểm cần sửa.
-
-A. Architecture dependent
-
-Nó hard-code:
-
-if hasattr(model, "layer4")
-
-Không phù hợp nếu sau này benchmark:
-
-* ViT;
-* WRN có naming khác;
-* custom architecture.
-
-Nếu không có layer4, code silently fallback về CE.
-
-Không nên silent như vậy.
-
-Nên có:
-
-FeatureExtractorAdapter(model, layer_name)
-
-⸻
-
-B. Feature drift chưa đồng nghĩa misclassification
-
-Bạn đang maximize:
-
-\|z_{adv}-z_{clean}\|_2
-
-nhưng feature đi xa không đảm bảo decision boundary bị vượt.
-
-Mình sẽ dùng objective kiểu:
-
+[
 L =
-L_{\text{margin}}
-+
-\lambda L_{\text{feature}}
+L_{\mathrm{cls}}
+----------------
 
-hoặc:
+\gamma\lambda
+\sum_i
+\frac{|\delta_i|}{|\delta_i|+\epsilon}.
+]
 
-L =
-CE(f(x_{adv}),y)
-+
-\lambda D(z_{adv},z_{clean}).
+Nghe có vẻ đúng hướng.
 
-Sau đó ablation:
+Nhưng `delta` tại chỗ đó không phải biến cần gradient mà update lại lấy:
 
-CE only
-Feature only
-CE + Feature
+```python
+grad = x_adv.grad
+```
 
-sẽ rất thuyết phục.
+Do đó sparsity proxy không thực sự đóng góp vào gradient đang dùng để update attack.
 
-⸻
+Nói cách khác, penalty Homotopy hiện tại gần như **không điều khiển optimization direction** như mục tiêu code muốn thể hiện. Sau đó method lại top-K gradient và `project_l0`.
 
-C. Potential forward-hook lifecycle issue
+Đây là bug cần sửa, không chỉ là khác biệt implementation.
 
-Mỗi FMSA instance register:
+---
 
-model.layer4.register_forward_hook(...)
+# 11. GSE custom khác rất xa GSE thật
 
-và dựa vào __del__() để remove.
+Repo implementation GSE hiện:
 
-Benchmark Group A lại tạo một attacker mới ở mỗi K.
+* gradient magnitude;
+* average pooling 2×2;
+* chọn top groups;
+* sparse PGD;
+* project (L_0).
 
-Python không đảm bảo destructor chạy ngay lập tức, nên hook lifecycle cần quản lý rõ.
+GSE thật tại ICLR 2025 là một algorithm **hai phase**:
+
+1. quasinorm optimization với (1/2)-quasinorm proximal operator;
+2. projected Nesterov accelerated gradient với magnitude regularization.
+
+([ML Anthology][6])
+
+Vì vậy custom code hiện tại hợp lý nếu đặt tên:
+
+> `BlockSparsePGD`
+
+nhưng không nên report nó dưới tên `GSE`.
+
+---
+
+# 12. BruSLe custom hiện gần như hoàn toàn khác paper
+
+Code:
+
+* lấy `patch_dim = int(sqrt(K))`;
+* random contiguous patch;
+* random ±α;
+* query model;
+* accept nếu loss tốt hơn.
+
+Trong khi BruSLeAttack là score-based **Bayesian sparse black-box algorithm**, ICLR 2024. ([ICLR Proceedings][7])
+
+Ngoài vấn đề fidelity còn có một vấn đề fairness rất cụ thể.
+
+Ví dụ:
+
+[
+K=8
+]
+
+thì:
+
+```text
+patch_dim = floor(sqrt(8)) = 2
+```
+
+=> thực tế chỉ thay:
+
+[
+2\times2=4
+]
+
+pixels.
+
+Tương tự:
+
+| Requested K | BruSLe thực dùng tối đa |
+| ----------: | ----------------------: |
+|           1 |                       1 |
+|           2 |                       1 |
+|           4 |                       4 |
+|           8 |                       4 |
+|          16 |                      16 |
+|          32 |                      25 |
+|          64 |                      64 |
+|         128 |                     121 |
+
+Nó vẫn thỏa (L_0\le K), nhưng **không tận dụng cùng budget**, nên so ASR trực tiếp không fair.
+
+---
+
+# 13. SAIF custom cũng không khớp SAIF thật
+
+Implementation hiện tại gần như:
+
+[
+S_t=S_{t-1}+|\nabla_xL|,
+]
+
+chọn top-K cumulative gradient rồi PGD update.
+
+Trong khi SAIF paper sử dụng **Frank-Wolfe / conditional gradient** để đồng thời kiểm soát magnitude và sparsity. ([arXiv][8])
+
+Vậy SAIF custom cũng nên coi là proxy, không phải paper baseline.
+
+---
+
+# 14. Sparse-PGD cần dùng official implementation
+
+Custom Sparse-PGD hiện:
+
+* dense perturbation `p`;
+* cumulative gradient magnitude `m_logits`;
+* hard top-K mask;
+* `delta = p * mask`.
+
+Cấu trúc này hợp lý như một sparse-PGD heuristic, nhưng không đủ để khẳng định reproduce Sparse-PGD paper.
+
+Paper chính thức sparse-PGD được ICML 2024 công bố với code `CityU-MLO/sPGD`. ([Proceedings of Machine Learning Research][9])
+
+Đối với baseline SOTA này, nên ưu tiên official.
+
+---
+
+# 15. OnePixel là một trong những custom baseline tốt hơn, nhưng có bug state
+
+OnePixel có cấu trúc DE khá đúng:
+
+* population;
+* mutation;
+* crossover;
+* selection;
+* coordinates + RGB.
+
+Tuy nhiên có một bug tiềm năng.
+
+Sau khi:
+
+```python
+pop[improved] = trials[improved]
+outs[improved] = trial_outs[improved]
+```
+
+`cand_imgs` không phải lúc nào cũng được decode lại.
+
+Ở iteration sau code có thể:
+
+```python
+succ_mask = outs.argmax(...) != y
+best_img = cand_imgs[first_succ]
+```
+
+Tức là prediction `outs` có thể thuộc **population mới**, nhưng `cand_imgs` vẫn thuộc population cũ.
+
+=> có trường hợp phát hiện success nhưng trả về image stale.
+
+### Fix
+
+Sau selection:
+
+```python
+cand_imgs = decode_population(pop)
+```
+
+hoặc track images đồng bộ với population.
+
+---
+
+# 16. JSMA hiện cũng là JSMA-inspired
+
+Code JSMA hiện:
+
+* lấy second-highest class làm target;
+* optimize target logit − true logit;
+* lấy absolute gradient;
+* chọn một spatial pixel;
+* cộng `theta` cho cả RGB.
+
+Đây không phải đầy đủ Jacobian Saliency Map formulation cổ điển với các điều kiện saliency/pair selection.
+
+Nó vẫn là baseline có ích, nhưng nên gọi:
+
+> `JSMA-inspired batched approximation`
+
+nếu không implement faithful version.
+
+---
+
+# 17. Group A — ý tưởng benchmark rất tốt
+
+Mình đồng ý với K grid:
+
+[
+K\in{1,2,4,8,16,32,64,128}.
+]
+
+Với CIFAR-10 có:
+
+[
+32\times32=1024\text{ spatial pixels}
+]
+
+thì tương ứng:
+
+|   K | % pixels |
+| --: | -------: |
+|   1 |   0.098% |
+|   2 |   0.195% |
+|   4 |   0.391% |
+|   8 |   0.781% |
+|  16 |    1.56% |
+|  32 |    3.13% |
+|  64 |    6.25% |
+| 128 |    12.5% |
+
+Grid logarithmic như vậy tốt hơn `[1,2,3,...]` vì cho thấy toàn bộ sparsity–success curve.
+
+Phần này mình sẽ **giữ**.
+
+Nhưng chỉ giữ sau khi baseline implementation đã được chuẩn hóa.
+
+---
+
+# 18. Group B — formulation ASR@K đúng về ý tưởng nhưng chưa đúng ở implementation
+
+Runner làm:
+
+[
+Success@K
+=========
+
+{attack\ succeeds}
+\cap
+{L_0(x_{adv}-x)\le K}.
+]
+
+Về lý thuyết, với một attack thật sự tìm **minimum support**, đây chính là cách rất đẹp để tạo cumulative ASR:
+
+[
+ASR@K
+=====
+
+P(K_{\min}\le K\mid f(x)=y).
+]
+
+### Nhưng vấn đề
+
+Các attack trong Group B không đồng nhất về việc thật sự tìm (K_{\min}).
+
+Ví dụ runner hiện gọi roughly:
+
+* SparseFool với `k=250`;
+* SigmaZero với cấu hình riêng;
+* Homotopy target sparsity 250;
+* GSE max groups;
+* Pixle 20 swaps;
+* FMSA budget 250.
+
+Sau đó lấy (L_0) output và post-filter.
+
+Đây **chỉ hợp lệ nếu output cuối thực sự đại diện cho solution support gần tối thiểu**.
+
+Với custom SigmaZero/Homotopy/GSE/FMSA hiện tại, điều kiện đó không thỏa.
+
+### Kết luận
+
+**Giữ concept cumulative ASR@K, nhưng chỉ áp dụng cho method có semantics minimum-support.**
+
+Đây thực ra là một trong những phần experimental design đáng giữ nhất của repo.
+
+---
+
+# 19. Có một mismatch (L_0) rất tinh vi với Sigma-Zero official
+
+Benchmark của repo định nghĩa **spatial pixel (L_0)**.
+
+Nhưng official Sigma-Zero code tính:
+
+```python
+true_l0 = active_delta.flatten(1).ne(0).sum(...)
+```
+
+tức là đếm **RGB scalar components**, không phải spatial pixels.
+
+Nếu adapter truyền:
+
+```python
+epsilon_budget=K
+```
+
+thì early stopping bên Sigma-Zero hiểu:
+
+[
+K = \text{changed channel components}
+]
+
+trong khi benchmark hiểu:
+
+[
+K = \text{changed spatial pixels}.
+]
+
+Hai budget không tương đương.
+
+### Nên làm
+
+Không truyền `epsilon_budget=spatial_K` trực tiếp.
+
+Với Group B minimum-support:
+
+* để Sigma-Zero chạy minimum-support tự nhiên;
+* sau đó **recompute spatial (L_0)** bằng metric chung của repo;
+* dùng giá trị đó cho cumulative ASR@K.
+
+Như vậy tất cả method được quy về một định nghĩa duy nhất.
+
+---
+
+# 20. Official adapter hiện chưa hoàn toàn đáng tin cậy về provenance
+
+`SigmaZeroOfficialAdapter` có pattern:
+
+```python
+try:
+    import official
+except ImportError:
+    define fallback implementation
+```
+
+Vấn đề là benchmark bên ngoài vẫn label:
+
+> `official-adapter`
+
+ngay cả khi ImportError khiến nó chạy fallback.
+
+Vậy một dependency thiếu cũng có thể làm bảng CSV nói:
+
+> Implementation Source = official-adapter
+
+nhưng thực tế **không chạy official code**.
+
+### Đây phải fail hard
 
 Nên:
 
-with FeatureHook(...) as hook:
-    ...
+```text
+official requested + import fails
+          ↓
+raise RuntimeError
+```
 
-hoặc explicit:
+Không fallback im lặng.
 
-try:
-   ...
-finally:
-   attacker.remove_hook()
+Nếu muốn fallback thì provenance phải trở thành:
 
-⸻
+```text
+fallback-reimplementation
+```
 
-23. Một inconsistency nhỏ nhưng đáng sửa: SAIF naming
+---
 
-Code gọi SAIF là:
+# 21. THIRD_PARTY.md cần sửa trước publication
 
-Sparsity-Aware Iterative Fast Attack
+Ý tưởng ghi provenance là rất tốt.
 
-Trong research plan lại mô tả khác về acronym/characterization.
+Nhưng hiện tài liệu vẫn chứa các entry kiểu:
 
-Với baseline paper, tên method, citation, formulation và source code phải tuyệt đối nhất quán.
+```text
+https://github.com/
+```
 
-Mình khuyên tạo:
+cho SigmaZero, Sparse-PGD, Homotopy, GSE.
 
-attack_registry.yaml
+Điều này không đủ audit.
 
-mỗi method có:
+Mỗi external baseline nên ghi:
 
-name:
-paper:
-year:
-venue:
-url:
-official_repo:
-implementation:
-constraint:
-whitebox:
-blackbox:
-targeted:
-budget_mode:
+```text
+paper
+official repo URL
+commit SHA
+license
+local vendored commit
+adapter file
+modifications
+upstream config
+```
 
-⸻
+Đặc biệt repo hiện không có license rõ ràng ở root trong cấu trúc mình đọc được, trong khi vendor nhiều third-party source. Đây nên được xử lý trước khi public research artifact.
 
-24. Defense hiện tại chưa thực sự tồn tại
+---
 
-Đây là một vấn đề tương đối nghiêm trọng so với scope trong docs/plan.md.
+# 22. Proposed methods hiện là phần cần làm lại nhiều nhất
 
-Plan đặt mục tiêu khá lớn:
+Đây là phần quan trọng nếu mục tiêu cuối là paper.
 
-* preprocessing;
-* transformations;
-* adversarial training;
-* defense analysis.
+Docs mô tả bốn ý tưởng khá khác biệt:
 
-Nhưng source tree hiện không có:
+### CPA
 
-src/defenses/
+> pixel cooperative interaction.
 
-trong khi run_defense_benchmark.py import:
+### FCSA
 
-from defenses.preprocessing.gaussian_blur ...
-from defenses.preprocessing.median_filter ...
+> coalition discovery,
+> (\Delta F(S)-\sum_i\Delta F(i)).
+
+### FMSA
+
+> feature → minimal pixel support.
+
+### HSA
+
+> actual hypergraph giữa pixels và representations.
+
+Nhưng code hiện tại chưa implement các formulation đó.
+
+---
+
+# 23. CPA hiện mới là local-smoothed saliency
+
+CPA code:
+
+[
+g_i=|\nabla_iL|
+]
+
+sau đó:
+
+[
+s_i
+===
+
+g_i
++
+\lambda
+\operatorname{AvgPool}_{3\times3}(g)_i.
+]
+
+Rồi top-K + gradient sign.
+
+Đây là:
+
+> spatially smoothed / neighborhood-aware saliency
+
+chứ chưa phải **cooperative pixel interaction**.
+
+Nó chưa đo:
+
+[
+I(i,j)
+]
+
+hay:
+
+[
+F(S)-\sum_{i\in S}F(i).
+]
+
+### Nhận xét
+
+CPA là **prototype tốt**, nhưng claim novelty cần hạ xuống hoặc algorithm phải nâng lên.
+
+---
+
+# 24. FCSA mismatch còn lớn hơn
+
+Docs định nghĩa coalition score dựa trên joint effect.
+
+Nhưng code hiện tính mỗi pixel độc lập:
+
+[
+score_i
+=======
+
+mean_c(|g_{ic}|)
+\times
+max_c(|g_{ic}|).
+]
+
+Sau đó top-K.
+
+Không có:
+
+* candidate coalition (S);
+* joint perturbation evaluation;
+* interaction;
+* synergy;
+* marginal contribution;
+* feature collapse;
+* coalition search.
+
+Do đó hiện tại FCSA **không phải coalition attack**.
+
+Nếu submit paper với formulation trong docs và code này, reviewer có thể bắt được rất nhanh.
+
+---
+
+# 25. FMSA hiện là feature-loss sparse PGD, không phải minimal-support search
+
+FMSA làm được một thứ thực sự có giá trị:
+
+* hook `layer4`;
+* lấy clean representation;
+* attack CE + feature difference;
+* top-K gradient;
+* project support.
+
+Đây có thể được diễn giải chính xác là:
+
+> **Feature-disruption-guided sparse attack**
+
+Nhưng chưa phải:
+
+> Feature-to-Minimal-Support Attack.
+
+Không có explicit search:
+
+[
+\min_{\delta}|\delta|_0
+\quad
+s.t.
+\quad
+D(F(x+\delta),F(x))\ge\tau.
+]
+
+Đặc biệt runner gọi cùng class với `support_budget=250` rồi đặt tên:
+
+> `FMSA-minimal-support`
+
+điều này chưa có cơ sở algorithmic.
+
+---
+
+# 26. HSA hiện chưa có hypergraph
+
+HSA code thực hiện:
+
+[
+s
+=
+
+g
++0.5AvgPool_3(g)
++0.3AvgPool_5(g)
++0.2AvgPool_7(g)
+]
+
+rồi top-K.
+
+Đây là **multi-scale spatial saliency**.
+
+Không có:
+
+* incidence matrix (H);
+* nodes;
+* explicit hyperedges;
+* node–hyperedge relationships;
+* hyperedge weights;
+* hypergraph Laplacian;
+* centrality trên hypergraph thật;
+* hyperedge disruption objective.
+
+Vậy tên `HypergraphSparseAttack` hiện overclaim khá mạnh.
+
+Nếu muốn giữ algorithm như hiện tại, tên phù hợp hơn là:
+
+> `MultiScaleSaliencySparseAttack`.
+
+Nếu muốn giữ paper idea **HSA**, cần viết lại phần algorithm.
+
+---
+
+# 27. Bảng tóm tắt độ faithful hiện tại
+
+| Method              | Tình trạng code                             | Có nên dùng kết quả hiện tại cho paper? |
+| ------------------- | ------------------------------------------- | --------------------------------------- |
+| FGSM                | tương đối chuẩn                             | ✅                                       |
+| BIM                 | tương đối chuẩn                             | ✅                                       |
+| PGD                 | tương đối chuẩn                             | ✅                                       |
+| JSMA                | simplified                                  | ⚠️                                      |
+| OnePixel            | khá gần DE, có bug state                    | ⚠️                                      |
+| CornerSearch custom | **sai threat model**                        | ❌                                       |
+| SAIF custom         | khác paper                                  | ❌                                       |
+| PGD0 custom         | heuristic                                   | ⚠️                                      |
+| Sparse-PGD custom   | simplified                                  | ❌ nếu gọi official baseline             |
+| Sparse-RS custom    | generic random search                       | ❌                                       |
+| BruSLe custom       | khác paper rất nhiều                        | ❌                                       |
+| SparseFool custom   | khác algorithm gốc                          | ❌                                       |
+| Sigma-Zero custom   | khác algorithm gốc                          | ❌                                       |
+| Homotopy custom     | có bug objective                            | ❌                                       |
+| GSE custom          | khác GSE thật                               | ❌                                       |
+| Pixle custom        | random swap approximation                   | ⚠️                                      |
+| CPA                 | prototype                                   | ⚠️                                      |
+| FCSA                | chưa có coalition                           | ❌ cho claim hiện tại                    |
+| FMSA                | feature-guided attack, chưa minimal support | ⚠️                                      |
+| HSA                 | chưa phải hypergraph                        | ❌ cho claim hiện tại                    |
+
+---
+
+# 28. PGD0 custom có một vấn đề optimization thú vị
+
+`PGD0Attack` làm:
+
+[
+\delta_{t+1}
+============
+
+\Pi_{L_0\le K}
+(\delta_t+\alpha,sign(g)).
+]
+
+Ở iteration đầu:
+
+[
+\delta_0=0.
+]
+
+Với sign-gradient, gần như tất cả nonzero pixels nhận magnitude bằng (\alpha), nên khi `project_l0` rank theo magnitude, rất nhiều pixel bị tie.
+
+Kết quả: top-K ban đầu có thể phụ thuộc chủ yếu vào behavior tie-breaking, chứ không phải pixel nào có gradient lớn hơn.
+
+Sau đó các pixel đã chọn tích lũy magnitude và support dễ bị “lock”.
+
+### Tốt hơn
+
+Dùng một trong:
+
+* score = gradient magnitude cho support selection;
+* magnitude update riêng;
+* random restart;
+* support swapping;
+* official PGD-(L_0).
+
+---
+
+# 29. Sampling benchmark có một bug reproducibility
+
+Code comment:
+
+> `Fixed Stratified / Deterministic Sample Indexing`
+
+nhưng thực tế dùng:
+
+```python
+torch.randperm(...)
+```
+
+không có stratification.
+
+Vậy phải sửa một trong hai:
+
+* đổi comment thành deterministic random sampling;
+* hoặc implement real class-stratified sampling.
+
+Mình nghiêng về **real stratification**, vì benchmark 1,000 CIFAR images rất dễ lấy đúng 100 ảnh/class.
+
+---
+
+# 30. File benchmark indices có bug khi thay `num_samples`
+
+Runner dùng một file:
+
+```text
+benchmark_indices_seed42.json
+```
+
+sau đó nếu file tồn tại:
+
+```python
+sampled_indices = json.load(f)[:n_eval]
+```
+
+Giả sử:
+
+1. lần đầu chạy 10 samples → lưu 10 indices;
+2. lần sau yêu cầu 1000;
+3. file đã tồn tại;
+4. slice `[:1000]` vẫn chỉ có 10.
+
+Nhưng metadata lại dùng requested `n_eval`.
+
+=> có thể request **1000 nhưng thực tế evaluate 10**.
+
+### Fix
+
+File nên chứa full deterministic permutation 10,000 indices, hoặc filename gồm sample count:
+
+```text
+cifar10_test_indices_seed42_n1000.json
+```
+
+và luôn assert:
+
+```python
+assert len(sampled_indices) == n_eval
+```
+
+---
+
+# 31. Metadata experiment vẫn còn thiếu những thứ quan trọng
+
+Hiện metadata có:
+
+* timestamp;
+* seed;
+* num samples;
+* device;
+* CUDA name;
+* indices hash;
+* official/custom flag.
+
+Đó là một khởi đầu tốt.
+
+Nhưng paper-grade artifact nên thêm:
+
+```text
+git commit SHA
+dataset name
+dataset revision/hash
+checkpoint SHA256
+checkpoint source/version
+model architecture
+clean accuracy full test
+attack config dump
+K values
+PyTorch version
+CUDA version
+Python version
+LPIPS version
+metric implementation version
+hostname/GPU
+```
+
+Quan trọng nhất là **checkpoint hash**.
+
+---
+
+# 32. Có thể benchmark model random mà không báo lỗi
+
+Ở `__main__`:
+
+1. tạo ResNet18 random;
+2. tìm checkpoint;
+3. nếu tìm thấy thì load;
+4. nếu không tìm thấy → tiếp tục benchmark model random.
+
+Đây là P0 engineering bug.
+
+Một benchmark adversarial trên untrained model hoàn toàn không có ý nghĩa.
+
+### Nên đổi thành
+
+```python
+ckpt = find_existing_checkpoint(...)
+if ckpt is None:
+    raise FileNotFoundError(...)
+```
+
+Chỉ cho phép random model khi có flag explicit như:
+
+```text
+--allow-untrained-model
+```
+
+---
+
+# 33. Dataset split khá tốt
+
+Dataset loader làm:
+
+[
+50,000
+\rightarrow
+40,000\ train
++
+10,000\ val
+]
+
+bằng stratified split, seed cố định.
+
+Test 10,000 được giữ riêng.
+
+Đây đúng với protocol mà mình nghĩ phù hợp cho project này.
+
+Không cần chia lại nữa.
+
+---
+
+# 34. Nhưng dataset từ HF cần pin revision
+
+Hiện load:
+
+```python
+load_dataset("Cuong2004/AA", ...)
+```
+
+không pin commit/revision.
+
+Nếu HF dataset thay đổi sau này:
+
+> cùng repo commit + cùng seed ≠ cùng dataset.
+
+Nên pin:
+
+```text
+dataset_repo_revision
+```
+
+hoặc lưu SHA/hash của test samples.
+
+---
+
+# 35. Training model có vài điểm nên chỉnh
+
+ResNet18 được adapt khá chuẩn cho CIFAR:
+
+* conv 3×3 stride 1;
+* bỏ maxpool;
+* classifier 10 classes.
+
+Optimizer:
+
+* SGD;
+* lr 0.1;
+* momentum 0.9;
+* WD (5\times10^{-4});
+* cosine schedule.
+
+Đây là recipe ổn.
+
+Nhưng validation hiện chỉ check khoảng mỗi 20 epochs và best checkpoint chỉ được chọn từ những điểm đó.
+
+Không cần validation quá thường xuyên, nhưng mình sẽ dùng:
+
+> validate mỗi 5 epochs
+
+hoặc mỗi epoch vì CIFAR validation rất rẻ.
+
+---
+
+# 36. Training reproducibility chưa đầy đủ
+
+`set_seed()` tồn tại và khá đầy đủ:
+
+* Python;
+* NumPy;
+* PyTorch;
+* CUDA;
+* deterministic cuDNN.
+
+Nhưng `train_clean_resnet18()` bản thân không gọi seed trước initialization/training.
+
+Vì vậy reproducibility phụ thuộc vào caller.
+
+### Nên để
+
+```python
+def train_clean_resnet18(..., seed=42):
+    set_seed(seed)
+```
+
+ngay trong training entrypoint.
+
+---
+
+# 37. Batch augmentation cần kiểm tra
+
+Training cache toàn bộ train set lên VRAM rồi chạy:
+
+```python
+bx = train_aug(X_shuffled[i:i+batch_size])
+```
+
+Cần verify rằng phiên bản torchvision đang dùng tạo **random crop/flip độc lập cho từng ảnh**, chứ không áp cùng random parameters cho toàn batch tensor.
+
+Nếu cùng crop/flip cho batch, augmentation diversity giảm đáng kể.
+
+Không nhất thiết chắc chắn lỗi trên mọi torchvision version, nhưng nên có unit test đơn giản cho điểm này.
+
+---
+
+# 38. `requirements.txt` không đủ để reproduce
+
+Hiện tất cả dependency gần như:
+
+```text
+torch>=2.0
+numpy>=...
+torchvision>=...
+```
+
+Với ML research, đây là quá lỏng.
+
+Một người chạy tháng 8/2026 và người chạy năm sau có thể nhận:
+
+* torch khác;
+* torchvision khác;
+* datasets khác;
+* LPIPS khác;
+* scipy khác.
+
+### Nên có
+
+```text
+requirements-lock.txt
+```
+
+hoặc `uv.lock` / `conda-lock`.
+
+---
+
+# 39. Runtime hiện không thực sự là attack runtime
+
+Runner bắt timer trước toàn bộ evaluation loop.
+
+Trong loop lại có:
+
+* clean prediction;
+* attack;
+* adversarial prediction;
+* (L_0,L_2,L_\infty);
+* PSNR;
+* SSIM;
+* LPIPS.
+
+Rồi mới dừng timer.
+
+Do đó:
+
+> `Time/Img`
+
+không phải pure attack generation time.
+
+Nó là:
+
+[
+T_{\rm attack}
++
+T_{\rm eval}
++
+T_{\rm metrics}
++
+T_{\rm LPIPS}.
+]
+
+Đối với paper thì sai semantics.
+
+### Tách thành
+
+```text
+Attack Time / Image
+Metric Time / Image
+End-to-End Time / Image
+```
+
+Với GPU nên dùng CUDA events hoặc synchronize chỉ quanh attack call.
+
+---
+
+# 40. Query count hiện còn thiếu
+
+Đặc biệt với:
+
+* OnePixel
+* CornerSearch
+* Sparse-RS
+* BruSLe
+* Pixle
+
+**query count là metric chính**, đôi khi còn quan trọng hơn runtime.
+
+THIRD_PARTY.md cũng tự ghi rằng query/gradient evaluations cần report.
+
+Nhưng current main attack table chủ yếu dùng `Avg Iterations`.
+
+Iteration không tương đương query.
+
+Ví dụ OnePixel:
+
+[
+1 \text{ iteration}
+]
+
+có thể evaluate cả population 20 samples.
+
+Nên có API thống nhất:
+
+```python
+attacker.last_queries
+attacker.last_grad_evals
+attacker.last_forward_evals
+```
+
+---
+
+# 41. Defense benchmark hiện chưa đủ chuẩn adversarial robustness
+
+Hiện defense benchmark chỉ gồm preprocessing:
+
+* Gaussian blur
+* Median filter
+* JPEG
+* TVM
+
+và test trên:
+
+* PGD
+* JSMA
+* PGD0.
+
+Nó báo:
+
+[
+Recovery
+========
+
+## Acc_{defended}
+
+Acc_{undefended}.
+]
+
+Có ba thiếu sót lớn.
+
+### A. Không report clean utility
+
+Ví dụ blur có thể tăng attacked accuracy nhưng làm giảm clean accuracy rất nhiều.
+
+Phải có:
+
+[
+CleanAcc_{defense}.
+]
+
+### B. Non-adaptive evaluation
+
+Attack hiện craft:
+
+[
+x_{adv}
+=======
+
+A(f,x)
+]
+
+rồi mới:
+
+[
+f(D(x_{adv})).
+]
+
+Một adaptive attacker phải attack:
+
+[
+f\circ D.
+]
+
+Nếu preprocessing không differentiable thì dùng BPDA/EOT khi phù hợp.
+
+Nếu không, defense dễ nhìn mạnh chỉ vì gradient masking.
+
+### C. Chưa có adversarial training
+
+Nếu mục tiêu dự án là đánh giá cả preprocessing và adversarial training thì repo hiện mới có preprocessing.
+
+---
+
+# 42. Tests hiện chủ yếu kiểm tra “chạy được”, chưa kiểm tra “đúng paper”
+
+Tests hiện kiểm tra khá tốt các contract:
+
+* shape;
+* pixel range;
+* (L_0\le K);
+* projection;
+* metric output;
+* defense execution.
+
+Official adapter tests cũng chủ yếu kiểm tra:
+
+* chạy được;
+* shape;
+* một vài L0 constraint.
+
+Nhưng chưa có regression test cho scientific equivalence.
+
+Mình sẽ bổ sung tối thiểu:
+
+1. exact output comparison custom vs official trên deterministic tiny case;
+2. deterministic attack dưới same seed;
+3. ASR non-decreasing theo K cho Group A, trong tolerance;
+4. `max L0 <= K`;
+5. conditional ASR formula;
+6. Group B cumulative monotonicity;
+7. official-adapter must really import official source;
+8. no checkpoint → benchmark must fail;
+9. requested 1000 samples → exactly 1000 evaluated;
+10. query counter correctness;
+11. clean/adv batch-size invariance;
+12. SSIM/PSNR cross-validation với reference library.
+
+---
+
+# 43. Kết quả đang commit hiện chưa thể được coi là benchmark
+
+File hiện tại cho các ASR tăng theo:
+
+```text
+0%, 10%, 20%, 30%, ...
+```
+
+rất rõ rệt.
+
+`full_attack_metrics.csv` cũng cho Clean Accuracy = 100% ở toàn bộ sample và các mức thay đổi theo bước 10 percentage points.
+
+Điều này phù hợp với việc đây là **tiny smoke test khoảng 10 clean-correct images**, không phải benchmark có statistical meaning.
+
+Do đó các số kiểu:
+
+> Sparse-RS 100%
+> Sparse-PGD 100%
+> CPA 90%
+
+trong artifact hiện tại **tuyệt đối chưa nên dùng để so sánh method**.
+
+Chúng chỉ cho biết:
+
+> pipeline chạy được.
+
+---
+
+# 44. Còn có mismatch giữa kết quả commit và code benchmark hiện tại
+
+CSV đang commit có schema như:
+
+```text
+ASR (%)
+Avg L0
+Avg L0 Ratio
+Max L0
+```
+
+Trong khi runner hiện tại xuất những field như:
+
+```text
+Conditional ASR (%)
+All Avg L0
+Success Avg L0
+Success Median L0
 ...
+```
 
-Nó sẽ fail import.
+Điều này cho thấy artifact `result_marimo` hiện tại không được tạo hoàn toàn bởi phiên bản benchmark source đang ở HEAD.
 
-Chưa hết, script còn:
+Đây là một reproducibility issue.
 
-model = get_model("resnet18", pretrained=False)
+### Nên để mỗi run có
 
-mà không load trained checkpoint.
+```text
+results/
+└── <run_id>/
+    ├── config.yaml
+    ├── metadata.json
+    ├── git_commit.txt
+    ├── metrics.csv
+    ├── per_sample.csv
+    └── figures/
+```
 
-Nghĩa là ngay cả khi thêm defense module, benchmark hiện sẽ attack một random ResNet18.
+Không overwrite kết quả giữa các version.
 
-Ngoài ra:
+---
 
-JSMAAttack(model, max_pixels=15)
+# 45. Checkpoint hiện thực sự được download từ HF
 
-trong defense runner, nhưng constructor thật của JSMA là:
+Log commit cho thấy các run gần đây tải:
 
-JSMAAttack(model, k=15, ...)
+```text
+Cuong2004/AA/models/resnet18_cifar10_best.pth
+```
 
-=> còn một API mismatch nữa.
+và có snapshot hash cụ thể trên HF cache.
 
-Defense hiện nên đánh dấu TODO / disabled, tránh khiến người đọc nghĩ nó đã hoàn thành.
+Đó là điểm tốt.
 
-⸻
+Nhưng snapshot/hash đó cần đưa luôn vào benchmark metadata thay vì chỉ nằm trong log.
 
-25. Một protocol final mình khuyên dùng
+---
 
-Thay vì tiếp tục thêm method, mình sẽ khóa benchmark thành:
+# 46. Thứ tự mình khuyên sửa
 
-Development
+Nếu mục tiêu là paper, **đừng vội chạy 1000–10000 ảnh ngay**.
 
-CIFAR-10
-ResNet18
-1000 fixed stratified test samples
-3 seeds cho stochastic attacks
-K = 1,2,4,8,16,32,64,128
+Thứ tự tốt nhất là:
 
-Dùng để debug/tune engineering.
+| Priority | Việc                                           |
+| -------- | ---------------------------------------------- |
+| **P0**   | Freeze definition/threat model từng attack     |
+| **P0**   | Official baseline phải chạy official thật      |
+| **P0**   | Xóa/đổi tên custom proxies gây nhầm lẫn        |
+| **P0**   | Sửa CornerSearch threat-model violation        |
+| **P0**   | Sửa Homotopy objective                         |
+| **P0**   | Sửa OnePixel stale state                       |
+| **P0**   | Sửa sample-index bug                           |
+| **P0**   | Fail nếu checkpoint không tồn tại              |
+| **P0**   | Viết lại proposed method theo đúng formulation |
+| **P1**   | Chuẩn hóa query/gradient counters              |
+| **P1**   | Tách attack runtime khỏi metric runtime        |
+| **P1**   | Pin dependency + dataset/checkpoint hashes     |
+| **P1**   | Per-sample results                             |
+| **P1**   | Add scientific regression tests                |
+| **P1**   | Adaptive defense evaluation                    |
+| **P2**   | CLI/config YAML/Hydra                          |
+| **P2**   | CI                                             |
+| **P2**   | polish docs/report                             |
 
-Final paper
+---
 
-CIFAR-10 full 10,000 test
-+ CIFAR-100 nếu đủ compute
-ResNet18
-+ WRN/ResNet50 cho cross-model confirmation
-same fixed samples
-same checkpoint
-same attack objective
-same K definition
+# 47. Kiến trúc benchmark mình sẽ giữ sau khi refactor
 
-Report mỗi K:
+Sau khi chỉnh, mình vẫn giữ thiết kế cốt lõi hiện tại:
 
-Conditional\ ASR@K
+### Group A — Fixed-budget attacks
 
-Robust\ Accuracy@K
+Chạy:
 
-L_0,\ L_2,\ L_\infty
+[
+K={1,2,4,8,16,32,64,128}.
+]
 
-PSNR,\ SSIM,\ LPIPS
+Report:
 
-trên successful adversarial examples, cộng:
+[
+ASR(K),\quad RA(K),\quad
+L_0,\ L_\infty,\ PSNR,\ SSIM,\ LPIPS.
+]
 
-runtime
-gradient evaluations
-queries for black-box
-success-conditioned iterations/queries
+Vẽ:
 
-Đồng thời tạo:
+[
+ASR\text{ vs }K.
+]
 
-ASR-K\ curve
+---
 
-và một scalar summary:
+### Group B — Minimal-support attacks
 
-AUC_{ASR-K}.
+Mỗi sample trả:
 
-⸻
+[
+K_i^\star.
+]
 
-26. Thứ tự sửa repo mình đề xuất
+Sau đó:
 
-Nếu mục tiêu là nhanh chóng đưa repo đến mức đáng tin cho paper, thứ tự nên là:
+[
+ASR@K
+=====
 
-P0 — sửa trước khi chạy lại experiment: sửa success-conditioned distortion metrics; sửa Group B mask; chuyển benchmark sample từ range(N) sang fixed stratified indices; thêm query counter cho black-box; ghi provenance official/custom trên từng attack; sửa training double augmentation; hoàn chỉnh requirements; disable/sửa defense runner hiện đang broken.
+\frac{
+\sum_i\mathbf 1[K_i^\star\le K]
+}{
+N_{\rm clean-correct}
+}.
+]
 
-P1 — trước khi tạo bảng paper: benchmark full 10k CIFAR-10; stochastic attacks ≥3 seeds; lưu checkpoint SHA/dataset indices/git commit/config; validation official adapters; thêm query/gradient evaluations; tách smoke-test results khỏi final results; root README + third-party provenance.
+Report thêm:
 
-P2 — nâng chất lượng research: thu gọn attack set thành các baseline thực sự quan trọng; chọn một proposed method; làm ablation mạnh; thêm cross-model/cross-dataset; sau đó mới làm defense và transferability.
+[
+Median(K^\star),\quad Mean(K^\star).
+]
 
-⸻
+Đây mới là cách cực kỳ đẹp để so Sigma-Zero, SparseFool và các genuine minimum-support approaches.
 
-Nhận xét cuối cùng
+---
 
-Repo hiện tại có một điểm rất tốt: khung benchmark đã hình thành khá rõ và spatial L_0 đã được chuẩn hóa đúng.  Việc cần làm bây giờ không phải mở rộng thêm từ 20 attack lên 25 attack.
+### Group C — Dense/non-spatial-budget
 
-Mình sẽ ưu tiên chuyển nó từ:
+FGSM/BIM/PGD/SFA được report riêng theo:
 
-“nhiều attack chạy được”
+* (\epsilon);
+* ASR;
+* Robust Accuracy;
+* (L_\infty);
+* PSNR/SSIM/LPIPS.
 
-sang:
+Không cố nhét vào ASR@K.
 
-“ít nhất 8–12 attack nhưng mọi comparison đều defensible trước reviewer.”
+---
 
-Về proposed method, FMSA hiện là hướng mình thấy đáng đầu tư nhất trong bốn candidate, CPA có thể giữ làm auxiliary/ablation; còn FCSA và đặc biệt HSA hiện cần redesign nếu muốn giữ các claim “coalition/hypergraph”.
+# 48. Proposed method nên chọn **một**, không giữ cả bốn dưới dạng “ours”
 
-Nếu mục tiêu tiếp theo là sửa repo trước khi chạy full benchmark, mình có thể chuyển toàn bộ nhận xét trên thành một checklist kiểu P0/P1/P2 theo từng file cụ thể, chỉ rõ file → function → lỗi → cách sửa → expected output, để triển khai lần lượt.
+Đây là điều mình sẽ thay mạnh nhất.
+
+Hiện repo đưa:
+
+* CPA
+* FCSA
+* FMSA
+* HSA
+
+đều vào benchmark như `ours`.
+
+Nhưng bốn cái thực chất là **bốn research directions**, chưa nên coi là bốn proposed algorithms cùng lúc.
+
+Cách hợp lý hơn:
+
+```text
+CPA prototype
+FCSA prototype
+FMSA prototype
+HSA prototype
+        ↓
+pilot experiment 100–500 images
+        ↓
+chọn 1 method mạnh nhất
+        ↓
+formalize
+        ↓
+ablation
+        ↓
+full benchmark
+```
+
+Trong trạng thái code hiện tại, nếu phải chọn một nền tảng dễ nâng cấp nhất, **FMSA có implementation substance tốt nhất** vì nó đã thực sự đưa feature representation vào objective. CPA đứng thứ hai vì implementation đơn giản và rõ ràng.
+
+FCSA/HSA hiện khoảng cách giữa claim và implementation quá lớn.
+
+---
+
+# 49. Repo hiện nên được định vị như thế nào?
+
+Mình sẽ gọi trạng thái hiện tại là:
+
+> **research benchmark scaffold + attack prototypes**
+
+chứ chưa phải:
+
+> **validated sparse adversarial attack benchmark**.
+
+Đó không phải vấn đề quá tệ — thực ra phần khó của việc tổ chức framework đã làm khá tốt.
+
+Điều cần tránh là lấy output hiện tại rồi bắt đầu viết Table 1/Table 2 của paper.
+
+---
+
+# 50. Đánh giá cuối cùng
+
+### Những gì nên giữ
+
+**Giữ gần như nguyên:**
+
+* cấu trúc module;
+* Group A/B/C;
+* spatial (L_0);
+* K grid;
+* conditional ASR;
+* success-conditioned distortion;
+* 40k/10k train/val;
+* held-out CIFAR test;
+* attack registry concept;
+* official adapter concept;
+* metadata/result infrastructure.
+
+### Những gì phải sửa trước khi full benchmark
+
+**Phải sửa:**
+
+* fidelity của baselines;
+* provenance official implementation;
+* CornerSearch custom;
+* SparseFool/SigmaZero/GSE/BruSLe/SAIF custom naming;
+* Group B semantics;
+* sample-index bug;
+* no-checkpoint behavior;
+* query count;
+* runtime methodology;
+* defense methodology.
+
+### Những gì cần thiết kế lại cho contribution
+
+**Thiết kế lại đáng kể:**
+
+* FCSA;
+* HSA;
+* FMSA minimal-support formulation;
+* CPA interaction/cooperation definition.
+
+---
+
+## Phán đoán ngắn nhất
+
+**Repo hiện tại có một benchmark framework tốt, nhưng algorithm layer chưa đáng tin cậy tương ứng.**
+
+Nếu sửa đúng thứ tự, mình nghĩ không cần rewrite project. Có thể giữ khoảng **70–80% infrastructure**, nhưng trước khi chạy full experiment nên **thay/chuẩn hóa phần baseline attack và chọn lại một proposed method duy nhất**.
+
+Điểm cần xử lý đầu tiên không phải hyperparameter hay tăng sample size, mà là **“method identity”: code đang chạy có thực sự là phương pháp mà tên của nó tuyên bố hay không**. Với trạng thái hiện tại, câu trả lời cho khá nhiều baseline và 3/4 proposed ideas là **chưa**.
+
+[1]: https://ojs.aaai.org/index.php/AAAI/article/view/20595?utm_source=chatgpt.com "Sparse-RS: A Versatile Framework for Query-Efficient Sparse Black-Box Adversarial Attacks | Proceedings of the AAAI Conference on Artificial Intelligence"
+[2]: https://openaccess.thecvf.com/content_ICCV_2019/html/Croce_Sparse_and_Imperceivable_Adversarial_Attacks_ICCV_2019_paper.html?utm_source=chatgpt.com "ICCV 2019 Open Access Repository"
+[3]: https://openaccess.thecvf.com/content_ICCV_2019/papers/Croce_Sparse_and_Imperceivable_Adversarial_Attacks_ICCV_2019_paper.pdf?utm_source=chatgpt.com "Sparse and Imperceivable Adversarial Attacks"
+[4]: https://openaccess.thecvf.com/content_CVPR_2019/html/Modas_SparseFool_A_Few_Pixels_Make_a_Big_Difference_CVPR_2019_paper.html?utm_source=chatgpt.com "CVPR 2019 Open Access Repository"
+[5]: https://github.com/sigma0-advx/sigma-zero/blob/main/readme.md?utm_source=chatgpt.com "sigma-zero/readme.md at main · sigma0-advx/sigma-zero · GitHub"
+[6]: https://mlanthology.org/iclr/2025/sadiku2025iclr-gse/?utm_source=chatgpt.com "GSE: Group-Wise Sparse and Explainable Adversarial Attacks | ML Anthology"
+[7]: https://proceedings.iclr.cc/paper_files/paper/2024/hash/efb7f7530e6630dc7dbbfb783207898a-Abstract-Conference.html?utm_source=chatgpt.com "BRUSLEATTACK: A QUERY-EFFICIENT SCORE- BASED BLACK-BOX SPARSE ADVERSARIAL ATTACK"
+[8]: https://arxiv.org/abs/2212.07495?utm_source=chatgpt.com "SAIF: Sparse Adversarial and Imperceptible Attack Framework"
+[9]: https://proceedings.mlr.press/v235/zhong24c.html?utm_source=chatgpt.com "Towards Efficient Training and Evaluation of Robust Models against $l_0$ Bounded Adversarial Perturbations"
+
+
+
+Tôi thắc mắc về custom và official. Các method official là lấy code trực tiếp từ paper còn custom là implement lại theo mô tả của paper đúng chứ? Vậy thì method nào có official rồi thì đâu cần custom nữa? Thậm chí là các method không có official mà chỉ có thể custom cũng nên xem xét việc có nên tiếp tục đưa vào baseline/benchmark hay không
+Đúng, cách hiểu của bạn về mặt nguyên tắc là như vậy:
+
+* Official: dùng implementation do tác giả paper phát hành, hoặc code chính thức được paper/repo tác giả chỉ định.
+* Custom: tự reimplement lại method dựa trên paper, công thức, pseudocode và mô tả experimental setup.
+
+Và từ góc độ làm benchmark cho paper, mình đồng ý với hướng bạn nêu: nếu đã có official implementation đủ dùng, không nên giữ custom version như baseline chính, trừ khi có lý do rất cụ thể như official code không chạy được trên framework/model hiện tại và bạn cần một bản port có kiểm chứng equivalence.
+
+Vấn đề của repo hiện tại là nó đang trộn hai mục đích khác nhau. Một mặt custom implementations có ích cho việc học thuật, debug, test API và chạy smoke test. Mặt khác khi chúng xuất hiện cạnh official implementation với cùng tên method, chúng tạo ra rủi ro rất lớn: người đọc dễ hiểu rằng cả hai đều đại diện cho cùng algorithm, trong khi thực tế custom có thể chỉ gần giống hoặc thậm chí khác đáng kể.
+
+Mình sẽ đề xuất policy cho AA_2 như sau:
+
+Trạng thái method	Đưa vào benchmark chính?	Cách xử lý
+Có official code, chạy được	Có	Chỉ dùng official
+Có official nhưng cần adapter	Có	Adapter mỏng, không sửa algorithm
+Có official nhưng code hỏng/không tương thích	Có điều kiện	Port/reimplement, nhưng phải validate với official
+Không có official, mô tả paper đủ chi tiết	Có điều kiện	Custom + ghi rõ reimplementation
+Không có official, paper thiếu chi tiết quan trọng	Không nên	Loại khỏi benchmark chính
+Chỉ tìm thấy implementation bên thứ ba	Có điều kiện mạnh	Chỉ dùng nếu được cộng đồng/paper khác tin cậy và audit được
+Custom chỉ “inspired by” paper	Không	Đổi tên thành phương pháp riêng hoặc bỏ
+
+Với các method có official, custom có thể vẫn tồn tại trong repo nhưng nên đưa ra khỏi experimental benchmark, chẳng hạn vào src/attacks/reimplementations/ hoặc legacy/, và không để runner chính import chúng. Điều này giúp codebase sạch hơn và quan trọng nhất là tránh vô tình chạy nhầm custom khi tạo bảng kết quả.
+
+Điểm thứ hai bạn nói còn quan trọng hơn: không phải method nào không có official cũng đáng reimplement để benchmark. Việc đưa một custom baseline vào paper chỉ hợp lý khi chúng ta có khả năng tái hiện method đủ chính xác. Nếu paper thiếu pseudocode, thiếu hyperparameter, không rõ stopping criterion, normalization, target selection, projection, query budget… thì custom implementation rất dễ trở thành “một algorithm mới mang tên algorithm cũ”. Trong trường hợp đó, bỏ baseline đó còn tốt hơn đưa một kết quả không đáng tin.
+
+Với AA_2, mình sẽ chia baseline thành ba tier:
+
+1. Tier A — authoritative baseline: official author code hoặc implementation chính thức trong thư viện đáng tin cậy. Đây là các method được phép vào bảng benchmark chính.
+2. Tier B — verified reimplementation: không có official usable code nhưng custom implementation đã được đối chiếu kỹ với paper, reproduction numbers và các invariants của algorithm. Có thể vào bảng, nhưng ghi rõ Reimplementation.
+3. Tier C — heuristic/proxy: implementation chỉ dựa trên ý tưởng chung. Không được mang tên paper baseline trong bảng chính.
+
+Theo tiêu chuẩn đó, nhiều custom hiện tại trong repo thực chất đang ở Tier C chứ chưa phải Tier B.
+
+Ví dụ rất rõ là custom CornerSearch: paper là black-box nhưng implementation custom dùng gradient. Cái này không thể gọi là CornerSearch reimplementation nữa. Tương tự custom Sigma-Zero chỉ dùng EMA gradient + top-K, trong khi σ-zero thật có differentiable L_0 approximation và dynamic thresholding. Những cái đó nên loại khỏi baseline ngay, không cần cố sửa nếu official đã có.
+
+Vì vậy, architecture mình khuyên cho repo sẽ là:
+
+src/attacks/
+├── official/
+│   ├── sparse_rs.py
+│   ├── corner_search.py
+│   ├── sigma_zero.py
+│   ├── sparsefool.py
+│   ├── spgd.py
+│   └── ...
+│
+├── reimplemented/
+│   ├── fgsm.py
+│   ├── bim.py
+│   ├── pgd.py
+│   └── <only methods without usable official code>
+│
+├── proposed/
+│   └── ...
+│
+└── experimental/
+    └── heuristic prototypes
+
+Còn attack_registry.yaml nên ghi rất rõ:
+
+implementation:
+  type: official
+  upstream_repo: ...
+  upstream_commit: ...
+
+hoặc:
+
+implementation:
+  type: reimplementation
+  validation: reproduction_checked
+
+Và benchmark runner chỉ chấp nhận official + verified reimplementation, không chạy experimental.
+
+Đối với danh sách hiện tại của AA_2, mình sẽ làm bước tiếp theo là audit toàn bộ baseline và rút gọn danh sách: method nào có official thì giữ official và xóa khỏi benchmark custom; method nào không có official thì kiểm tra paper/code availability, rồi quyết định KEEP / REIMPLEMENT / DROP. Đây sẽ làm benchmark nhỏ hơn nhưng đáng tin hơn rất nhiều, và đó là lựa chọn đúng cho paper.

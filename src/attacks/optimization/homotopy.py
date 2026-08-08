@@ -35,7 +35,8 @@ class HomotopyAttack:
             out = self.model(x_adv)
             loss_cls = self.criterion(out, y).sum()
 
-            loss_l0_proxy = torch.sum(delta.abs() / (delta.abs() + 1e-3))
+            perturbation = x_adv - x
+            loss_l0_proxy = torch.sum(perturbation.abs() / (perturbation.abs() + 1e-3))
             loss = loss_cls - gamma * 0.01 * loss_l0_proxy
 
             self.model.zero_grad()

@@ -144,7 +144,9 @@ def get_model(model_name=MODEL_NAME, num_classes=NUM_CLASSES, pretrained=False, 
 
     model = model.to(device)
 
-    if checkpoint_path and os.path.isfile(checkpoint_path):
+    if checkpoint_path is not None:
+        if not os.path.isfile(checkpoint_path):
+            raise FileNotFoundError(f"Specified model checkpoint file not found: '{checkpoint_path}'")
         logger.info(f"Loading checkpoint from: {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=device)
         state_dict = checkpoint["model_state_dict"] if "model_state_dict" in checkpoint else checkpoint
@@ -174,8 +176,11 @@ def evaluate_accuracy(model, data_loader, device=DEVICE):
 
     return 100.0 * correct / total
 
-def train_clean_resnet18(train_loader, val_loader, test_loader, epochs=200, batch_size=1024, device=DEVICE):
+def train_clean_resnet18(train_loader, val_loader, test_loader, epochs=200, batch_size=1024, device=DEVICE, seed=42):
     """Fast ResNet-18 training loop with VRAM caching & HF auto-upload/download."""
+    from src.core.utils import set_seed
+    set_seed(seed)
+
     existing_ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
     best_checkpoint_path = os.path.join(SAVED_MODELS_DIR, "resnet18_cifar10_best.pth")
 

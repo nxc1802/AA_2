@@ -95,14 +95,16 @@ class OnePixelAttack:
                 pop[improved] = trials[improved]
                 pop_losses[improved] = trial_losses[improved]
                 outs[improved] = trial_outs[improved]
+                cand_imgs[improved] = trial_imgs[improved]
 
                 curr_best = pop_losses.argmax().item()
                 if pop_losses[curr_best].item() > best_loss:
                     best_loss = pop_losses[curr_best].item()
-                    cand_imgs = decode_population(pop)
                     best_img = cand_imgs[curr_best:curr_best+1]
 
             x_adv[b] = best_img[0].detach()
 
-        self.last_steps = steps_to_fool.cpu().numpy().tolist()
+        steps_list = steps_to_fool.cpu().numpy().tolist()
+        self.last_steps = steps_list
+        self.last_queries = [int((s + 1) * self.pop_size) for s in steps_list]
         return x_adv

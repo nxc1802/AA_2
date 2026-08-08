@@ -60,5 +60,16 @@ class TestOfficialAdapters(unittest.TestCase):
         x_adv = adapter.attack(self.x, self.y)
         self.assertEqual(x_adv.shape, self.x.shape)
 
+    def test_adapters_fail_hard_on_invalid_path(self):
+        import src.attacks.adapters.sigma_zero_adapter as sz_mod
+        old_path = sz_mod.THIRD_PARTY_SIGMA_ZERO
+        sz_mod.THIRD_PARTY_SIGMA_ZERO = "/non_existent_third_party_path"
+        try:
+            adapter = sz_mod.SigmaZeroOfficialAdapter(self.model, k=10, steps=5)
+            with self.assertRaises(RuntimeError):
+                adapter.attack(self.x, self.y)
+        finally:
+            sz_mod.THIRD_PARTY_SIGMA_ZERO = old_path
+
 if __name__ == "__main__":
     unittest.main()

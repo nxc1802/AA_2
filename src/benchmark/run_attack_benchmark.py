@@ -124,20 +124,80 @@ def run_attack_benchmark_suite(
     total_ds_len = len(test_ds)
     n_eval = min(num_samples, total_ds_len) if num_samples else total_ds_len
 
-    # Fixed Stratified / Deterministic Sample Indexing
-    indices_file = os.path.join(RESULT_DIR, f"benchmark_indices_seed{seed}.json")
+def get_stratified_indices(dataset, num_samples, seed=42):
+    """
+    Returns a class-stratified list of sample indices from dataset.
+    For CIFAR-10, draws equal samples per class deterministically.
+    """
+    targets = []
+    if hasattr(dataset, "targets"):
+        targets = dataset.targets
+    elif hasattr(dataset, "labels"):
+        targets = dataset.labels
+    elif hasattr(dataset, "hf_ds"):
+        targets = [int(item["label"]) for item in dataset.hf_ds]
+    else:
+        for i in range(len(dataset)):
+            _, y = dataset[i]
+            targets.append(int(y))
+
+    targets = [int(t) for t in targets]
+    class_indices = {}
+    for idx, label in enumerate(targets):
+        if label not in class_indices:
+            class_indices[label] = []
+        class_indices[label].append(idx)
+
+    num_classes = len(class_indices)
+    samples_per_class = max(1, num_samples // num_classes)
+
+    g = torch.Generator().manual_seed(seed)
+    stratified_indices = []
+
+    for c in sorted(class_indices.keys()):
+        c_idxs = torch.tensor(class_indices[c])
+        perm = torch.randperm(len(c_idxs), generator=g)
+        selected = c_idxs[perm[:samples_per_class]].tolist()
+        stratified_indices.extend(selected)
+
+    perm_final = torch.randperm(len(stratified_indices), generator=g)
+    final_indices = [stratified_indices[i] for i in perm_final[:num_samples]]
+    return final_indices
+
+# ==============================================================================
+# EXPERIMENTAL BENCHMARK ENGINE (GROUPS A, B, C)
+# ==============================================================================
+def run_attack_benchmark_suite(
+    model, 
+    test_loader, 
+    eval_batch_size=EVAL_BATCH_SIZE, 
+    num_samples=NUM_BENCHMARK_TEST_SAMPLES, 
+    device=DEVICE, 
+    seed=42, 
+    use_official_adapters=False,
+    output_prefix="benchmark"
+):
+    set_seed(seed)
+    model = prepare_model_for_eval(model, device)
+
+    test_ds = test_loader.dataset
+    total_ds_len = len(test_ds)
+    n_eval = min(num_samples, total_ds_len) if num_samples else total_ds_len
+
+    # Fixed Class-Stratified / Deterministic Sample Indexing
+    indices_file = os.path.join(RESULT_DIR, f"benchmark_indices_seed{seed}_n{n_eval}.json")
     if os.path.exists(indices_file):
         with open(indices_file, "r") as f:
-            sampled_indices = json.load(f)[:n_eval]
+            sampled_indices = json.load(f)
     else:
-        g = torch.Generator().manual_seed(seed)
-        sampled_indices = torch.randperm(total_ds_len, generator=g).tolist()[:n_eval]
+        sampled_indices = get_stratified_indices(test_ds, n_eval, seed=seed)
         with open(indices_file, "w") as f:
             json.dump(sampled_indices, f)
 
+    assert len(sampled_indices) == n_eval, f"Sampled indices length {len(sampled_indices)} does not match n_eval {n_eval}"
     test_subset = Subset(test_ds, sampled_indices)
     eval_loader = DataLoader(test_subset, batch_size=eval_batch_size, shuffle=False, num_workers=0)
-    logger.info(f"Evaluation DataLoader created with batch_size={eval_batch_size}, total_samples={len(test_subset)} (Indices hash: {hashlib.md5(str(sampled_indices).encode()).hexdigest()[:8]})")
+    logger.info(f"Evaluation DataLoader created with batch_size={eval_batch_size}, total_samples={len(test_subset)} (Indices MD5: {hashlib.md5(str(sampled_indices).encode()).hexdigest()[:8]})")
 
     lpips_fn = None
     if lpips is not None:
@@ -185,6 +245,9 @@ def run_attack_benchmark_suite(
         all_psnrs, all_ssims, all_lpipss = [], [], []
         all_clean_masks, all_succ_masks = [], []
         total_steps = 0.0
+        total_queries = 0.0
+        total_grad_evals = 0.0
+        pure_attack_dt = 0.0
 
         for x, y in eval_loader:
             x, y = x.to(device), y.to(device)
@@ -193,13 +256,27 @@ def run_attack_benchmark_suite(
                 clean_preds = torch.argmax(model(x), dim=1)
             c_mask = (clean_preds == y)
 
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            t_att_start = time.time()
             x_adv = attacker.attack(x, y)
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
                 total_steps += sum(attacker.last_steps)
             else:
                 steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
                 total_steps += steps * B
+
+            if hasattr(attacker, "last_queries"):
+                total_queries += sum(attacker.last_queries)
+            else:
+                total_queries += total_steps
+
+            if hasattr(attacker, "last_grad_evals"):
+                total_grad_evals += sum(attacker.last_grad_evals)
 
             with torch.no_grad():
                 adv_preds = torch.argmax(model(x_adv), dim=1)
@@ -265,7 +342,10 @@ def run_attack_benchmark_suite(
             "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
             "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
             "Avg Iterations": round(total_steps / total_count, 2),
-            "Time/Img (s)": round(dt / total_count, 4)
+            "Avg Queries": round(total_queries / total_count, 2),
+            "Avg Grad Evals": round(total_grad_evals / total_count, 2),
+            "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
+            "Total Time/Img (s)": round(dt / total_count, 4)
         }
         logger.info(f"[Group C] {name}: Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
         results_list.append(res)
@@ -275,23 +355,19 @@ def run_attack_benchmark_suite(
     # GROUP A: Direct K-Sweep Attacks (Budget Constrained)
     # ==========================================================================
     logger.info("=== GROUP A: Direct K-Sweep Attacks (Explicit K-budget) ===")
-    if use_official_adapters and OFFICIAL_ADAPTERS_AVAILABLE:
+    if use_official_adapters:
+        if not OFFICIAL_ADAPTERS_AVAILABLE:
+            raise RuntimeError("Requested use_official_adapters=True, but official adapters failed to load!")
         logger.info(">>> Running Group A with Official Author Adapters (third_party)")
         group_a_factories = {
             "JSMA": (lambda m, k, d: JSMAAttack(m, k=k, device=d), "custom-reimplementation"),
             "OnePixel": (lambda m, k, d: OnePixelAttack(m, k=k, device=d), "custom-reimplementation"),
             "CornerSearch": (lambda m, k, d: CornerSearchOfficialAdapter(m, k=k, device=d), "official-adapter"),
-            "SAIF": (lambda m, k, d: SAIFAttack(m, k=k, device=d), "custom-reimplementation"),
             "PGD0": (lambda m, k, d: PGD0OfficialAdapter(m, k=k, device=d), "official-adapter"),
             "Sparse-PGD": (lambda m, k, d: SparsePGDOfficialAdapter(m, sparsity_budget=k, device=d), "official-adapter"),
             "Sparse-RS": (lambda m, k, d: SparseRSOfficialAdapter(m, n_pixels=k, device=d), "official-adapter"),
-            "BruSLe": (lambda m, k, d: BruSLeAttack(m, k=k, device=d), "custom-reimplementation"),
-            "IPFSA": (lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d), "custom-reimplementation"),
-            "GradientGuidance": (lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d), "custom-reimplementation"),
             "CPA": (lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d), "ours"),
-            "FCSA": (lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d), "ours"),
-            "FMSA-budgeted": (lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d), "ours"),
-            "HSA-budgeted": (lambda m, k, d: HypergraphSparseAttack(m, budget=k, device=d), "ours")
+            "FMSA-budgeted": (lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d), "ours")
         }
     else:
         group_a_factories = {
@@ -322,6 +398,9 @@ def run_attack_benchmark_suite(
             all_psnrs, all_ssims, all_lpipss = [], [], []
             all_clean_masks, all_succ_masks = [], []
             total_steps = 0.0
+            total_queries = 0.0
+            total_grad_evals = 0.0
+            pure_attack_dt = 0.0
 
             for x, y in eval_loader:
                 x, y = x.to(device), y.to(device)
@@ -330,13 +409,27 @@ def run_attack_benchmark_suite(
                     clean_preds = torch.argmax(model(x), dim=1)
                 c_mask = (clean_preds == y)
 
+                if device.type == "cuda":
+                    torch.cuda.synchronize()
+                t_att_start = time.time()
                 x_adv = attacker.attack(x, y)
+                if device.type == "cuda":
+                    torch.cuda.synchronize()
+                pure_attack_dt += (time.time() - t_att_start)
                 
                 if hasattr(attacker, "last_steps"):
                     total_steps += sum(attacker.last_steps)
                 else:
                     steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
                     total_steps += steps * B
+
+                if hasattr(attacker, "last_queries"):
+                    total_queries += sum(attacker.last_queries)
+                else:
+                    total_queries += total_steps
+
+                if hasattr(attacker, "last_grad_evals"):
+                    total_grad_evals += sum(attacker.last_grad_evals)
 
                 with torch.no_grad():
                     adv_preds = torch.argmax(model(x_adv), dim=1)
@@ -402,7 +495,10 @@ def run_attack_benchmark_suite(
                 "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
                 "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
                 "Avg Iterations": round(total_steps / total_count, 2),
-                "Time/Img (s)": round(dt / total_count, 4)
+                "Avg Queries": round(total_queries / total_count, 2),
+                "Avg Grad Evals": round(total_grad_evals / total_count, 2),
+                "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
+                "Total Time/Img (s)": round(dt / total_count, 4)
             }
             logger.info(f"[Group A] {name} (K={K}): Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
             results_list.append(res)
@@ -412,7 +508,9 @@ def run_attack_benchmark_suite(
     # GROUP B: Unconstrained Minimum Support Optimization -> Cumulative ASR@K Evaluation
     # ==========================================================================
     logger.info("=== GROUP B: Minimal Support Optimization (Corrected Cumulative ASR@K Evaluation) ===")
-    if use_official_adapters and OFFICIAL_ADAPTERS_AVAILABLE:
+    if use_official_adapters:
+        if not OFFICIAL_ADAPTERS_AVAILABLE:
+            raise RuntimeError("Requested use_official_adapters=True, but official adapters failed to load!")
         logger.info(">>> Running Group B with Official Author Adapters (third_party)")
         group_b_attacks = {
             "SparseFool": (SparseFoolOfficialAdapter(model, k=250, steps=50, device=device), "official-adapter"),
@@ -441,6 +539,9 @@ def run_attack_benchmark_suite(
         all_psnrs, all_ssims, all_lpipss = [], [], []
         all_clean_masks, all_fooled_masks = [], []
         total_steps = 0.0
+        total_queries = 0.0
+        total_grad_evals = 0.0
+        pure_attack_dt = 0.0
 
         for x, y in eval_loader:
             x, y = x.to(device), y.to(device)
@@ -449,13 +550,27 @@ def run_attack_benchmark_suite(
                 clean_preds = torch.argmax(model(x), dim=1)
             c_mask = (clean_preds == y)
 
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            t_att_start = time.time()
             x_adv = attacker.attack(x, y)
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
                 total_steps += sum(attacker.last_steps)
             else:
                 steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
                 total_steps += steps * B
+
+            if hasattr(attacker, "last_queries"):
+                total_queries += sum(attacker.last_queries)
+            else:
+                total_queries += total_steps
+
+            if hasattr(attacker, "last_grad_evals"):
+                total_grad_evals += sum(attacker.last_grad_evals)
 
             with torch.no_grad():
                 adv_preds = torch.argmax(model(x_adv), dim=1)
@@ -525,7 +640,10 @@ def run_attack_benchmark_suite(
                 "Success SSIM": round(dist_m_k["succ_ssim_mean"], 4),
                 "Success LPIPS": round(dist_m_k["succ_lpips_mean"], 4) if dist_m_k["succ_lpips_mean"] is not None else None,
                 "Avg Iterations": round(total_steps / total_count, 2),
-                "Time/Img (s)": round(dt / total_count, 4)
+                "Avg Queries": round(total_queries / total_count, 2),
+                "Avg Grad Evals": round(total_grad_evals / total_count, 2),
+                "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
+                "Total Time/Img (s)": round(dt / total_count, 4)
             }
             logger.info(f"[Group B] {name} (K={K}): Conditional ASR@K={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
             results_list.append(res)
@@ -545,12 +663,17 @@ if __name__ == "__main__":
     num_samples = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 10
     output_prefix = sys.argv[2] if len(sys.argv) > 2 else "local_test_10"
     use_official = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
+    allow_untrained = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
     
-    logger.info(f"Benchmark configured with num_samples={num_samples}, output_prefix='{output_prefix}', use_official_adapters={use_official}")
-    model = get_model("resnet18", pretrained=False)
+    logger.info(f"Benchmark configured with num_samples={num_samples}, output_prefix='{output_prefix}', use_official_adapters={use_official}, allow_untrained={allow_untrained}")
     ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
-    if ckpt:
-        model = get_model(checkpoint_path=ckpt, device=DEVICE)
+    if not ckpt and not allow_untrained:
+        raise FileNotFoundError(
+            "Model checkpoint 'resnet18_cifar10_best.pth' not found! "
+            "Benchmarking an untrained random model produces invalid scientific results. "
+            "Please train or download checkpoint, or pass allow_untrained=True to force."
+        )
+    model = get_model("resnet18", pretrained=False, checkpoint_path=ckpt if ckpt else None, device=DEVICE)
         
     _, _, test_loader = get_dataloaders(batch_size=EVAL_BATCH_SIZE)
     df_results = run_attack_benchmark_suite(

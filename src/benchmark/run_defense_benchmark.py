@@ -58,7 +58,7 @@ logger.addHandler(console_handler)
 # BENCHMARK ENGINE
 # ==============================================================================
 def evaluate_defenses(model, loader, device=DEVICE):
-    """Evaluates defense recovery rates against representative dense and sparse attacks."""
+    """Evaluates defense recovery rates and clean utility against representative dense and sparse attacks."""
     model = prepare_model_for_eval(model, device)
 
     defenses = {
@@ -74,36 +74,56 @@ def evaluate_defenses(model, loader, device=DEVICE):
         "PGD0 (Opt Sparse)": PGD0Attack(model, k=15, steps=15, device=device),
     }
 
+    clean_batches = []
+    labels_batches = []
+    for images, labels in loader:
+        clean_batches.append(images.to(device))
+        labels_batches.append(labels.to(device))
+    clean_images = torch.cat(clean_batches, dim=0)
+    all_labels = torch.cat(labels_batches, dim=0)
+
+    # Compute baseline clean accuracy without defense
+    with torch.no_grad():
+        clean_preds = torch.argmax(model(clean_images), dim=1)
+        clean_acc_base = 100.0 * (clean_preds == all_labels).float().mean().item()
+
+    # Pre-compute clean utility for each defense
+    clean_acc_defended = {}
+    for def_name, defense in defenses.items():
+        def_clean_imgs = defense.defend(clean_images)
+        with torch.no_grad():
+            def_clean_preds = torch.argmax(model(def_clean_imgs), dim=1)
+            clean_acc_defended[def_name] = 100.0 * (def_clean_preds == all_labels).float().mean().item()
+
     results = []
 
     for atk_name, attacker in test_attacks.items():
         logger.info(f"--- Testing Defenses Against Attack: {atk_name} ---")
 
         adv_batches = []
-        orig_labels = []
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
             adv = attacker.attack(images, labels)
             adv_batches.append(adv)
-            orig_labels.append(labels)
 
         adv_images = torch.cat(adv_batches, dim=0)
-        labels = torch.cat(orig_labels, dim=0)
 
         with torch.no_grad():
             undefended_preds = torch.argmax(model(adv_images), dim=1)
-            undef_acc = 100.0 * (undefended_preds == labels).float().mean().item()
+            undef_acc = 100.0 * (undefended_preds == all_labels).float().mean().item()
 
         for def_name, defense in defenses.items():
             defended_imgs = defense.defend(adv_images)
             with torch.no_grad():
                 defended_preds = torch.argmax(model(defended_imgs), dim=1)
-                def_acc = 100.0 * (defended_preds == labels).float().mean().item()
+                def_acc = 100.0 * (defended_preds == all_labels).float().mean().item()
 
             rec_rate = def_acc - undef_acc
             res = {
                 "Attack": atk_name,
                 "Defense": def_name,
+                "Clean Acc Undefended (%)": round(clean_acc_base, 2),
+                "Clean Acc Defended (%)": round(clean_acc_defended[def_name], 2),
                 "Undefended Acc (%)": round(undef_acc, 2),
                 "Defended Acc (%)": round(def_acc, 2),
                 "Recovery Rate (%)": round(rec_rate, 2)
@@ -116,11 +136,16 @@ def evaluate_defenses(model, loader, device=DEVICE):
 if __name__ == "__main__":
     logger.info("=== Running High-Performance Defense Benchmark ===")
     num_samples = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else NUM_SAMPLES
+    allow_untrained = sys.argv[2].lower() == "true" if len(sys.argv) > 2 else False
     
-    model = get_model("resnet18", pretrained=False)
     ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
-    if ckpt:
-        model = get_model(checkpoint_path=ckpt, device=DEVICE)
+    if not ckpt and not allow_untrained:
+        raise FileNotFoundError(
+            "Model checkpoint 'resnet18_cifar10_best.pth' not found! "
+            "Benchmarking defenses on an untrained model is scientifically invalid. "
+            "Please train or download checkpoint, or pass allow_untrained=True to force."
+        )
+    model = get_model("resnet18", pretrained=False, checkpoint_path=ckpt if ckpt else None, device=DEVICE)
         
     loader = get_sample_batch(batch_size=BATCH_SIZE, num_samples=num_samples)
 

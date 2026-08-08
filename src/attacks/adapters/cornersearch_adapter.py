@@ -17,13 +17,18 @@ class CornerSearchOfficialAdapter:
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        if not os.path.exists(THIRD_PARTY_SIA):
+            raise RuntimeError(f"Official CornerSearch dependency not found at '{THIRD_PARTY_SIA}'")
         with scoped_sys_path(THIRD_PARTY_SIA):
-            from cornersearch_attacks_pt import CSattack
+            try:
+                from cornersearch_attacks_pt import CSattack
+            except ImportError as e:
+                raise RuntimeError(f"Failed to import official CornerSearch module: {e}")
 
             args = {
                 'type_attack': 'L0',
-                'n_iter': min(self.max_iter, 5),
-                'n_max': min(max(1, self.k), 5),
+                'n_iter': self.max_iter,
+                'n_max': max(1, self.k),
                 'epsilon': 0.0,
                 'kappa': 0.0,
                 'sparsity': self.k,
@@ -34,6 +39,10 @@ class CornerSearchOfficialAdapter:
             x_np = x.detach().cpu().permute(0, 2, 3, 1).numpy()
             y_np = y.detach().cpu().numpy()
 
-            adv_np, _, _ = official_attacker.perturb(x_np, y_np)
+            adv_np, queries, _ = official_attacker.perturb(x_np, y_np)
+            if hasattr(queries, "__len__"):
+                self.last_queries = list(queries)
+            else:
+                self.last_queries = [queries] * x.size(0)
             adv_tensor = torch.from_numpy(adv_np).permute(0, 3, 1, 2).to(self.device).float()
             return adv_tensor

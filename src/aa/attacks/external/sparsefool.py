@@ -15,7 +15,11 @@ class SparseFool(Attack):
         self.lambda_val = lambda_val
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> AttackOutput:
-        device = x.device
+        try:
+            device = next(self.model.parameters()).device
+        except StopIteration:
+            device = x.device
+
         with scoped_sys_path(THIRD_PARTY_SPARSEFOOL):
             from sparsefool import sparsefool
 
@@ -26,9 +30,9 @@ class SparseFool(Attack):
 
             total_loops = 0
             for b in range(B):
-                x_single = x[b:b+1]
+                x_single = x[b:b+1].to(device)
                 fool_im, r, p_label, f_label, loops = sparsefool(
-                    x_single, self.model, lb=0.0, ub=1.0, lambda_=self.lambda_val, max_iter=self.steps, device=str(device)
+                    x_single, self.model, lb=0.0, ub=1.0, lambda_=self.lambda_val, max_iter=self.steps, device=device
                 )
                 x_adv[b] = fool_im[0].detach()
                 total_loops += loops

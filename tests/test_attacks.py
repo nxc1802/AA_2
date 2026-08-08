@@ -187,6 +187,26 @@ class TestAttacks(unittest.TestCase):
             l0 = compute_spatial_l0(x_adv - x)
             self.assertTrue((l0 <= k).all().item())
 
+    def test_success_first_selection_logic(self):
+        set_seed(42)
+        model, x, y = self.get_test_inputs()
+        k = 8
+        cpa = CooperativePixelsAttack(model, coalition_size=k, steps=10)
+        fcsa = FunctionalCoalitionSparseAttack(model, max_coalition_size=k, steps=10)
+        fmsa = FeatureToMinimalSupportAttack(model, support_budget=k, steps=10)
+        hsa = HypergraphSparseAttack(model, budget=k, steps=10)
+
+        for attacker in [cpa, fcsa, fmsa, hsa]:
+            x_adv = attacker.attack(x, y)
+            with torch.no_grad():
+                preds = model(x_adv).argmax(dim=1)
+            succ = (preds != y)
+            # If attack succeeded at any step, returned best_adv must be misclassifying
+            if hasattr(attacker, "last_steps"):
+                foo_mask = torch.tensor(attacker.last_steps, device=x.device) < attacker.steps
+                if foo_mask.any():
+                    self.assertTrue(succ[foo_mask].all().item())
+
     def test_metrics_psnr_ssim(self):
         orig = torch.rand(2, 3, 32, 32)
         adv = orig.clone()

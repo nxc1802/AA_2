@@ -1,17 +1,19 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.core.projections import project_l0, exact_spatial_topk_mask
+from src.core.projections import project_l0, exact_spatial_topk_mask, compute_spatial_l0
 from src.core.utils import prepare_model_for_eval, get_best_device
 
 class HypergraphSparseAttack:
     """
     Hypergraph Sparse Attack (HSA).
-    Constructs a spatial hypergraph structure:
-      - Nodes: Spatial pixels (H x W)
-      - Hyperedges: Multi-scale receptive fields (3x3, 5x5, 7x7)
-    Selects top node centrality scores to break maximum hyperedges while strictly
-    projecting perturbation onto exact K-sparse L0 ball.
+    Constructs an explicit spatial hypergraph incidence structure:
+      - Nodes V: Spatial pixels (H x W)
+      - Hyperedges E: Multi-scale receptive fields (3x3, 5x5, 7x7)
+      - Incidence matrix H_ve, hyperedge degree D_e, node degree D_v
+    Calculates hypergraph node centrality C(v) = sum_{e ni v} (W(e)/|e|) * sum_{u in e} (|g_u| / D_v(u)).
+    Selects top nodes breaking maximum hyperedges while strictly projecting perturbation onto
+    exact K-sparse L0 ball with Success-First Selection.
     """
     def __init__(self, model: nn.Module, budget: int = 15, steps: int = 25, alpha: float = 4/255.0, device: torch.device = None):
         self.model = prepare_model_for_eval(model, device)
@@ -21,25 +23,32 @@ class HypergraphSparseAttack:
         self.device = device if device is not None else get_best_device()
         self.criterion = nn.CrossEntropyLoss(reduction='none')
 
-    def _construct_hypergraph_degree(self, images: torch.Tensor, labels: torch.Tensor):
-        images.requires_grad = True
-        outputs = self.model(images)
-        loss_vec = self.criterion(outputs, labels)
-        loss = loss_vec.sum()
-        
-        self.model.zero_grad()
-        loss.backward()
-
-        grad = images.grad.data
+    def _compute_hypergraph_centrality(self, grad: torch.Tensor) -> torch.Tensor:
+        """
+        Computes explicit hypergraph node centrality C(v) over multi-scale hyperedge structures.
+        """
+        B, C, H, W = grad.shape
         grad_mag = grad.abs().sum(dim=1, keepdim=True) # (B, 1, H, W)
 
-        # Multi-scale spatial receptive field hyperedge pooling (3x3, 5x5, 7x7)
-        h_pool3 = F.avg_pool2d(grad_mag, kernel_size=3, stride=1, padding=1)
-        h_pool5 = F.avg_pool2d(grad_mag, kernel_size=5, stride=1, padding=2)
-        h_pool7 = F.avg_pool2d(grad_mag, kernel_size=7, stride=1, padding=3)
+        # Multi-scale hyperedge weights W(e) = sum_{u in e} |g_u|
+        w3 = F.conv2d(grad_mag, torch.ones(1, 1, 3, 3, device=self.device), padding=1)
+        w5 = F.conv2d(grad_mag, torch.ones(1, 1, 5, 5, device=self.device), padding=2)
+        w7 = F.conv2d(grad_mag, torch.ones(1, 1, 7, 7, device=self.device), padding=3)
 
-        node_centrality = grad_mag + 0.5 * h_pool3 + 0.3 * h_pool5 + 0.2 * h_pool7
-        return node_centrality, grad
+        # Hyperedge cardinality |e|
+        de3, de5, de7 = 9.0, 25.0, 49.0
+
+        # Node degree D_v(v) = sum_{e ni v} W(e)
+        d_v = w3 + w5 + w7 + 1e-8
+        normalized_grad = grad_mag / d_v
+
+        # Hypergraph propagation C(v) = sum_{e ni v} (W(e)/|e|) * sum_{u in e} (|g_u| / D_v(u))
+        c3 = F.conv2d(normalized_grad, torch.ones(1, 1, 3, 3, device=self.device), padding=1) * (w3 / de3)
+        c5 = F.conv2d(normalized_grad, torch.ones(1, 1, 5, 5, device=self.device), padding=2) * (w5 / de5)
+        c7 = F.conv2d(normalized_grad, torch.ones(1, 1, 7, 7, device=self.device), padding=3) * (w7 / de7)
+
+        node_centrality = grad_mag + c3 + c5 + c7
+        return node_centrality
 
     def attack(self, images: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         orig_images = images.clone().detach().to(self.device)
@@ -52,14 +61,24 @@ class HypergraphSparseAttack:
         with torch.no_grad():
             out_init = self.model(orig_images)
             best_loss = self.criterion(out_init, labels)
+            best_succ = (out_init.argmax(dim=1) != labels)
+            best_l0 = torch.where(best_succ, torch.zeros(B, device=self.device), torch.full((B,), float('inf'), device=self.device))
 
         steps_to_fool = torch.full((B,), self.steps, dtype=torch.float, device=self.device)
-        fooled_mask = (out_init.argmax(dim=1) != labels)
+        fooled_mask = best_succ.clone()
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
-            adv_images = (orig_images + delta).clamp(0.0, 1.0)
-            node_centrality, grad = self._construct_hypergraph_degree(adv_images, labels)
+            adv_images = (orig_images + delta).clamp(0.0, 1.0).requires_grad_(True)
+            outputs = self.model(adv_images)
+            loss_vec = self.criterion(outputs, labels)
+            loss = loss_vec.sum()
+
+            self.model.zero_grad()
+            loss.backward()
+
+            grad = adv_images.grad.data
+            node_centrality = self._compute_hypergraph_centrality(grad)
 
             hypergraph_mask = exact_spatial_topk_mask(node_centrality, self.budget).float()
             candidate_delta = delta + self.alpha * grad.sign() * hypergraph_mask
@@ -71,15 +90,27 @@ class HypergraphSparseAttack:
                 out_step = self.model(adv_images_proj)
                 curr_loss = self.criterion(out_step, labels)
                 preds = out_step.argmax(dim=1)
+                cand_succ = (preds != labels)
+                cand_l0 = compute_spatial_l0(adv_images_proj - orig_images).float()
 
-                improved = curr_loss > best_loss
-                best_loss[improved] = curr_loss[improved]
-                best_adv[improved] = adv_images_proj[improved]
+                # Success-First Selection logic (Bug #20 fix)
+                replace = (
+                    (cand_succ & ~best_succ) |
+                    (cand_succ & best_succ & ((cand_l0 < best_l0) | ((cand_l0 == best_l0) & (curr_loss > best_loss)))) |
+                    (~cand_succ & ~best_succ & (curr_loss > best_loss))
+                )
 
-                current_fooled = (preds != labels)
-                newly_fooled = current_fooled & (~fooled_mask)
+                best_adv[replace] = adv_images_proj[replace]
+                best_succ[replace] = cand_succ[replace]
+                best_l0[replace] = cand_l0[replace]
+                best_loss[replace] = curr_loss[replace]
+
+                newly_fooled = cand_succ & (~fooled_mask)
                 steps_to_fool[newly_fooled] = step + 1
                 fooled_mask = fooled_mask | newly_fooled
 
-        self.last_steps = steps_to_fool.cpu().numpy().tolist()
+        steps_list = steps_to_fool.cpu().numpy().tolist()
+        self.last_steps = steps_list
+        self.last_queries = [int(s * 2 + 1) for s in steps_list]
+        self.last_grad_evals = [int(s) for s in steps_list]
         return best_adv

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Optional
-from src.core.projections import project_l0, exact_spatial_topk_mask
+from src.core.projections import project_l0, exact_spatial_topk_mask, compute_spatial_l0
 from src.core.utils import prepare_model_for_eval, get_best_device
 
 class FeatureExtractorAdapter:
@@ -82,9 +82,11 @@ class FeatureToMinimalSupportAttack:
             out_init = self.model(orig_images)
             clean_features = self.feature_adapter.extracted_features.clone().detach() if self.feature_adapter.extracted_features is not None else None
             best_loss = self.ce_loss(out_init, labels)
+            best_succ = (out_init.argmax(dim=1) != labels)
+            best_l0 = torch.where(best_succ, torch.zeros(B, device=self.device), torch.full((B,), float('inf'), device=self.device))
 
         steps_to_fool = torch.full((B,), self.steps, dtype=torch.float, device=self.device)
-        fooled_mask = (out_init.argmax(dim=1) != labels)
+        fooled_mask = best_succ.clone()
         steps_to_fool[fooled_mask] = 0.0
 
         for step in range(self.steps):
@@ -117,13 +119,22 @@ class FeatureToMinimalSupportAttack:
                 out_step = self.model(adv_images_proj)
                 curr_ce = self.ce_loss(out_step, labels)
                 preds = out_step.argmax(dim=1)
+                cand_succ = (preds != labels)
+                cand_l0 = compute_spatial_l0(adv_images_proj - orig_images).float()
 
-                improved = curr_ce > best_loss
-                best_loss[improved] = curr_ce[improved]
-                best_adv[improved] = adv_images_proj[improved]
+                # Success-First Selection logic (Bug #20 fix)
+                replace = (
+                    (cand_succ & ~best_succ) |
+                    (cand_succ & best_succ & ((cand_l0 < best_l0) | ((cand_l0 == best_l0) & (curr_ce > best_loss)))) |
+                    (~cand_succ & ~best_succ & (curr_ce > best_loss))
+                )
 
-                current_fooled = (preds != labels)
-                newly_fooled = current_fooled & (~fooled_mask)
+                best_adv[replace] = adv_images_proj[replace]
+                best_succ[replace] = cand_succ[replace]
+                best_l0[replace] = cand_l0[replace]
+                best_loss[replace] = curr_ce[replace]
+
+                newly_fooled = cand_succ & (~fooled_mask)
                 steps_to_fool[newly_fooled] = step + 1
                 fooled_mask = fooled_mask | newly_fooled
 

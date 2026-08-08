@@ -170,6 +170,7 @@ class CSattack():
     #corr_pred = sess.run(self.model.correct_prediction, {self.model.x_input: x_nat, self.model.y_input: y_nat})
     corr_pred = get_predictions(self.model, x_nat, y_nat)
     bs = self.shape_img[0]*self.shape_img[1]
+    queries = np.ones([x_nat.shape[0]], dtype=np.int64)
     
     for c in range(x_nat.shape[0]):
       if corr_pred[c]:
@@ -181,7 +182,7 @@ class CSattack():
         
         # checks one-pixels modifications
         for counter in range(self.n_corners):
-          #logit_2[counter*bs:(counter+1)*bs], pred = sess.run([self.model.y, self.model.correct_prediction], feed_dict={self.model.x_input: batch_x[counter*bs:(counter+1)*bs], self.model.y_input: np.tile(batch_y,(bs))})
+          queries[c] += bs
           logit_2[counter*bs:(counter+1)*bs] = get_logits(self.model, batch_x[counter*bs:(counter+1)*bs])
           pred = logit_2[counter*bs:(counter+1)*bs].argmax(axis=-1) == np.tile(batch_y,(bs))
           if not pred.all() and not found:
@@ -207,7 +208,7 @@ class CSattack():
                  ind_cl = np.copy(ind[:, c2])
 
                  batch_x = npixels_perturbation(self, x_nat[c], ind_cl, n3, sigma)
-                 #pred = sess.run(self.model.correct_prediction, feed_dict={self.model.x_input: batch_x, self.model.y_input: np.tile(batch_y,(batch_x.shape[0]))})
+                 queries[c] += batch_x.shape[0]
                  pred = get_predictions(self.model, batch_x, np.tile(batch_y,(batch_x.shape[0])))
                  
                  if np.sum(pred.astype(np.int32)) < self.n_iter and not found:
@@ -225,11 +226,9 @@ class CSattack():
     
     pixels_changed = np.sum(np.amax(np.abs(adv - x_nat) > 1e-10, axis=-1), axis=(1,2))
     print('Pixels changed: ', pixels_changed)
-    #print('attack successful: ', fl_success)
-    #print('attack successful: {:.2f}%'.format((1.0 - np.mean(fl_success))*100.0))
-    #corr_pred = sess.run(self.model.correct_prediction, {self.model.x_input: adv, self.model.y_input: y_nat})
     corr_pred = get_predictions(self.model, adv, y_nat)
+    queries += 1
     print('Robust accuracy at {} pixels: {:.2f}%'.format(self.k, np.sum(corr_pred)/x_nat.shape[0]*100.0))
     print('Maximum perturbation size: {:.5f}'.format(np.amax(np.abs(adv - x_nat))))
     
-    return adv, pixels_changed, fl_success
+    return adv, pixels_changed, queries, fl_success

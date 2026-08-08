@@ -10,10 +10,11 @@ class CornerSearchOfficialAdapter:
     """
     Adapter wrapping official author implementation of CornerSearch (fra31/sparse-imperceivable-attacks, ICCV 2019).
     """
-    def __init__(self, model: nn.Module, k: int = 15, max_pixels: int = None, max_iter: int = 1000, device: torch.device = None):
+    def __init__(self, model: nn.Module, k: int = 15, max_pixels: int = None, max_iter: int = 1000, n_max: int = 100, device: torch.device = None):
         self.model = prepare_model_for_eval(model, device)
         self.k = max_pixels if max_pixels is not None else k
         self.max_iter = max_iter
+        self.n_max = n_max
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -28,7 +29,7 @@ class CornerSearchOfficialAdapter:
             args = {
                 'type_attack': 'L0',
                 'n_iter': self.max_iter,
-                'n_max': max(1, self.k),
+                'n_max': self.n_max,
                 'epsilon': 0.0,
                 'kappa': 0.0,
                 'sparsity': self.k,
@@ -39,10 +40,10 @@ class CornerSearchOfficialAdapter:
             x_np = x.detach().cpu().permute(0, 2, 3, 1).numpy()
             y_np = y.detach().cpu().numpy()
 
-            adv_np, queries, _ = official_attacker.perturb(x_np, y_np)
+            adv_np, _, queries, _ = official_attacker.perturb(x_np, y_np)
             if hasattr(queries, "__len__"):
-                self.last_queries = list(queries)
+                self.last_queries = [int(q) for q in queries]
             else:
-                self.last_queries = [queries] * x.size(0)
+                self.last_queries = [int(queries)] * x.size(0)
             adv_tensor = torch.from_numpy(adv_np).permute(0, 3, 1, 2).to(self.device).float()
             return adv_tensor

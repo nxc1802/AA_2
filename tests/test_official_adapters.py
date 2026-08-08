@@ -60,6 +60,15 @@ class TestOfficialAdapters(unittest.TestCase):
         x_adv = adapter.attack(self.x, self.y)
         self.assertEqual(x_adv.shape, self.x.shape)
 
+    def test_corner_search_adapter(self):
+        adapter = CornerSearchOfficialAdapter(self.model, k=2, max_iter=10)
+        x_adv = adapter.attack(self.x, self.y)
+        self.assertEqual(x_adv.shape, self.x.shape)
+        self.assertTrue(hasattr(adapter, "last_queries"))
+        self.assertEqual(len(adapter.last_queries), 2)
+        # Sample 0 is correctly classified so CSattack runs candidate evaluations (> 100)
+        self.assertGreater(adapter.last_queries[0], 100)
+
     def test_adapters_fail_hard_on_invalid_path(self):
         import src.attacks.adapters.sigma_zero_adapter as sz_mod
         old_path = sz_mod.THIRD_PARTY_SIGMA_ZERO

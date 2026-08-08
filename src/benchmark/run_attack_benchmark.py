@@ -388,15 +388,16 @@ def run_attack_benchmark_suite(
         }
 
     for name, (factory, source_label) in group_a_factories.items():
-        for K in K_VALUES:
-            attacker = factory(model, K, device)
+        if name == "CornerSearch":
+            K_max = max(K_VALUES)
+            attacker = factory(model, K_max, device)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             t0 = time.time()
 
             all_l0s, all_l2s, all_linfs = [], [], []
             all_psnrs, all_ssims, all_lpipss = [], [], []
-            all_clean_masks, all_succ_masks = [], []
+            all_clean_masks, all_fooled_masks = [], []
             total_steps = 0.0
             total_queries = 0.0
             total_grad_evals = 0.0
@@ -416,7 +417,7 @@ def run_attack_benchmark_suite(
                 if device.type == "cuda":
                     torch.cuda.synchronize()
                 pure_attack_dt += (time.time() - t_att_start)
-                
+
                 if hasattr(attacker, "last_steps"):
                     total_steps += sum(attacker.last_steps)
                 else:
@@ -435,7 +436,7 @@ def run_attack_benchmark_suite(
                     adv_preds = torch.argmax(model(x_adv), dim=1)
 
                 r_mask = (adv_preds == y)
-                succ_mask = c_mask & (~r_mask)
+                fooled_mask = c_mask & (~r_mask)
 
                 diff = x_adv - x
                 l0_per = compute_spatial_l0(diff)
@@ -447,7 +448,7 @@ def run_attack_benchmark_suite(
                 lpips_per = compute_per_sample_lpips(x, x_adv, lpips_fn)
 
                 all_clean_masks.append(c_mask)
-                all_succ_masks.append(succ_mask)
+                all_fooled_masks.append(fooled_mask)
                 all_l0s.append(l0_per)
                 all_l2s.append(l2_per)
                 all_linfs.append(linf_per)
@@ -461,7 +462,7 @@ def run_attack_benchmark_suite(
             dt = time.time() - t0
 
             c_mask_tensor = torch.cat(all_clean_masks)
-            succ_mask_tensor = torch.cat(all_succ_masks)
+            fooled_mask_tensor = torch.cat(all_fooled_masks)
             l0_tensor = torch.cat(all_l0s)
             l2_tensor = torch.cat(all_l2s)
             linf_tensor = torch.cat(all_linfs)
@@ -470,39 +471,157 @@ def run_attack_benchmark_suite(
             lpips_tensor = torch.cat(all_lpipss) if all_lpipss else None
 
             clean_correct = c_mask_tensor.sum().item()
-            adv_succ = succ_mask_tensor.sum().item()
             total_count = l0_tensor.numel()
-
             clean_acc = 100.0 * clean_correct / total_count
-            cond_asr = 100.0 * adv_succ / max(1, clean_correct)
-            rob_acc = 100.0 * (clean_correct - adv_succ) / total_count
 
-            dist_m = compute_distortion_metrics(
-                l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_mask_tensor
-            )
+            for K in K_VALUES:
+                succ_k_mask = fooled_mask_tensor & (l0_tensor <= K)
+                adv_succ_k = succ_k_mask.sum().item()
+                rob_acc_k = 100.0 * (clean_correct - adv_succ_k) / total_count
+                cond_asr_k = 100.0 * adv_succ_k / max(1, clean_correct)
 
-            res = {
-                "Group": "Group A", "Attack Method": name, "K": K,
-                "Implementation Source": source_label,
-                "Clean Acc (%)": round(clean_acc, 2), "Robust Acc (%)": round(rob_acc, 2),
-                "Conditional ASR (%)": round(cond_asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
-                "All Avg L0": round(dist_m["all_l0_mean"], 2),
-                "Success Avg L0": round(dist_m["succ_l0_mean"], 2),
-                "Success Median L0": round(dist_m["succ_l0_median"], 2),
-                "Success Avg L2": round(dist_m["succ_l2_mean"], 4),
-                "Success Avg L_inf": round(dist_m["succ_linf_mean"], 4),
-                "Success PSNR (dB)": round(dist_m["succ_psnr_mean"], 2),
-                "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
-                "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
-                "Avg Iterations": round(total_steps / total_count, 2),
-                "Avg Queries": round(total_queries / total_count, 2),
-                "Avg Grad Evals": round(total_grad_evals / total_count, 2),
-                "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
-                "Total Time/Img (s)": round(dt / total_count, 4)
-            }
-            logger.info(f"[Group A] {name} (K={K}): Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
-            results_list.append(res)
-            pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
+                dist_m = compute_distortion_metrics(
+                    l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_k_mask
+                )
+
+                res = {
+                    "Group": "Group A", "Attack Method": name, "K": K,
+                    "Implementation Source": source_label,
+                    "Clean Acc (%)": round(clean_acc, 2), "Robust Acc (%)": round(rob_acc_k, 2),
+                    "Conditional ASR (%)": round(cond_asr_k, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc_k, 2),
+                    "All Avg L0": round(dist_m["all_l0_mean"], 2),
+                    "Success Avg L0": round(dist_m["succ_l0_mean"], 2),
+                    "Success Median L0": round(dist_m["succ_l0_median"], 2),
+                    "Success Avg L2": round(dist_m["succ_l2_mean"], 4),
+                    "Success Avg L_inf": round(dist_m["succ_linf_mean"], 4),
+                    "Success PSNR (dB)": round(dist_m["succ_psnr_mean"], 2),
+                    "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
+                    "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
+                    "Avg Iterations": round(total_steps / total_count, 2),
+                    "Avg Queries": round(total_queries / total_count, 2),
+                    "Avg Grad Evals": round(total_grad_evals / total_count, 2),
+                    "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
+                    "Total Time/Img (s)": round(dt / total_count, 4)
+                }
+                logger.info(f"[Group A] {name} (K={K}): Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
+                results_list.append(res)
+                pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
+        else:
+            for K in K_VALUES:
+                attacker = factory(model, K, device)
+                if device.type == "cuda":
+                    torch.cuda.synchronize()
+                t0 = time.time()
+
+                all_l0s, all_l2s, all_linfs = [], [], []
+                all_psnrs, all_ssims, all_lpipss = [], [], []
+                all_clean_masks, all_succ_masks = [], []
+                total_steps = 0.0
+                total_queries = 0.0
+                total_grad_evals = 0.0
+                pure_attack_dt = 0.0
+
+                for x, y in eval_loader:
+                    x, y = x.to(device), y.to(device)
+                    B = x.size(0)
+                    with torch.no_grad():
+                        clean_preds = torch.argmax(model(x), dim=1)
+                    c_mask = (clean_preds == y)
+
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    t_att_start = time.time()
+                    x_adv = attacker.attack(x, y)
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    pure_attack_dt += (time.time() - t_att_start)
+                    
+                    if hasattr(attacker, "last_steps"):
+                        total_steps += sum(attacker.last_steps)
+                    else:
+                        steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
+                        total_steps += steps * B
+
+                    if hasattr(attacker, "last_queries"):
+                        total_queries += sum(attacker.last_queries)
+                    else:
+                        total_queries += total_steps
+
+                    if hasattr(attacker, "last_grad_evals"):
+                        total_grad_evals += sum(attacker.last_grad_evals)
+
+                    with torch.no_grad():
+                        adv_preds = torch.argmax(model(x_adv), dim=1)
+
+                    r_mask = (adv_preds == y)
+                    succ_mask = c_mask & (~r_mask)
+
+                    diff = x_adv - x
+                    l0_per = compute_spatial_l0(diff)
+                    l2_per = torch.norm(diff.view(B, -1), p=2, dim=1)
+                    linf_per = torch.norm(diff.view(B, -1), p=float('inf'), dim=1)
+
+                    psnr_per = compute_per_sample_psnr(x, x_adv)
+                    ssim_per = compute_per_sample_ssim(x, x_adv)
+                    lpips_per = compute_per_sample_lpips(x, x_adv, lpips_fn)
+
+                    all_clean_masks.append(c_mask)
+                    all_succ_masks.append(succ_mask)
+                    all_l0s.append(l0_per)
+                    all_l2s.append(l2_per)
+                    all_linfs.append(linf_per)
+                    all_psnrs.append(psnr_per)
+                    all_ssims.append(ssim_per)
+                    if lpips_per is not None:
+                        all_lpipss.append(lpips_per)
+
+                if device.type == "cuda":
+                    torch.cuda.synchronize()
+                dt = time.time() - t0
+
+                c_mask_tensor = torch.cat(all_clean_masks)
+                succ_mask_tensor = torch.cat(all_succ_masks)
+                l0_tensor = torch.cat(all_l0s)
+                l2_tensor = torch.cat(all_l2s)
+                linf_tensor = torch.cat(all_linfs)
+                psnr_tensor = torch.cat(all_psnrs)
+                ssim_tensor = torch.cat(all_ssims)
+                lpips_tensor = torch.cat(all_lpipss) if all_lpipss else None
+
+                clean_correct = c_mask_tensor.sum().item()
+                adv_succ = succ_mask_tensor.sum().item()
+                total_count = l0_tensor.numel()
+
+                clean_acc = 100.0 * clean_correct / total_count
+                cond_asr = 100.0 * adv_succ / max(1, clean_correct)
+                rob_acc = 100.0 * (clean_correct - adv_succ) / total_count
+
+                dist_m = compute_distortion_metrics(
+                    l0_tensor, l2_tensor, linf_tensor, psnr_tensor, ssim_tensor, lpips_tensor, succ_mask_tensor
+                )
+
+                res = {
+                    "Group": "Group A", "Attack Method": name, "K": K,
+                    "Implementation Source": source_label,
+                    "Clean Acc (%)": round(clean_acc, 2), "Robust Acc (%)": round(rob_acc, 2),
+                    "Conditional ASR (%)": round(cond_asr, 2), "Accuracy Drop (%)": round(clean_acc - rob_acc, 2),
+                    "All Avg L0": round(dist_m["all_l0_mean"], 2),
+                    "Success Avg L0": round(dist_m["succ_l0_mean"], 2),
+                    "Success Median L0": round(dist_m["succ_l0_median"], 2),
+                    "Success Avg L2": round(dist_m["succ_l2_mean"], 4),
+                    "Success Avg L_inf": round(dist_m["succ_linf_mean"], 4),
+                    "Success PSNR (dB)": round(dist_m["succ_psnr_mean"], 2),
+                    "Success SSIM": round(dist_m["succ_ssim_mean"], 4),
+                    "Success LPIPS": round(dist_m["succ_lpips_mean"], 4) if dist_m["succ_lpips_mean"] is not None else None,
+                    "Avg Iterations": round(total_steps / total_count, 2),
+                    "Avg Queries": round(total_queries / total_count, 2),
+                    "Avg Grad Evals": round(total_grad_evals / total_count, 2),
+                    "Pure Attack Time/Img (s)": round(pure_attack_dt / total_count, 4),
+                    "Total Time/Img (s)": round(dt / total_count, 4)
+                }
+                logger.info(f"[Group A] {name} (K={K}): Conditional ASR={res['Conditional ASR (%)']}%, Robust Acc={res['Robust Acc (%)']}%, Success Avg L0={res['Success Avg L0']}")
+                results_list.append(res)
+                pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
     # ==========================================================================
     # GROUP B: Unconstrained Minimum Support Optimization -> Cumulative ASR@K Evaluation

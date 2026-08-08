@@ -8,6 +8,7 @@ import math
 import json
 import logging
 import hashlib
+import yaml
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
@@ -29,7 +30,9 @@ from src.core import (
     set_seed,
     get_best_device,
     synchronize_device,
-    get_device_name
+    get_device_name,
+    compute_file_sha256,
+    get_git_reproducibility_info
 )
 from src.datasets.dataset_loader import get_dataloaders
 from src.models.model_factory import get_model, find_existing_checkpoint
@@ -79,6 +82,22 @@ try:
 except Exception as e:
     OFFICIAL_ADAPTERS_AVAILABLE = False
 
+# Load Attack Registry
+REGISTRY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../attacks/attack_registry.yaml"))
+with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+    ATTACK_REGISTRY = yaml.safe_load(f).get("attacks", {})
+
+def is_paper_eligible(attack_name: str) -> bool:
+    """Checks if an attack is eligible for paper main benchmark (main_benchmark: true)."""
+    if attack_name in ATTACK_REGISTRY:
+        return ATTACK_REGISTRY[attack_name].get("main_benchmark", False) is True
+    for suffix in ["-budgeted", "-minimal-support"]:
+        if attack_name.endswith(suffix):
+            base_name = attack_name[:-len(suffix)]
+            if base_name in ATTACK_REGISTRY:
+                return ATTACK_REGISTRY[base_name].get("main_benchmark", False) is True
+    return False
+
 # ==============================================================================
 # CONFIGURABLE PARAMETERS & PATHS
 # ==============================================================================
@@ -106,26 +125,6 @@ logger.addHandler(file_handler)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
-
-# ==============================================================================
-# EXPERIMENTAL BENCHMARK ENGINE (GROUPS A, B, C)
-# ==============================================================================
-def run_attack_benchmark_suite(
-    model, 
-    test_loader, 
-    eval_batch_size=EVAL_BATCH_SIZE, 
-    num_samples=NUM_BENCHMARK_TEST_SAMPLES, 
-    device=DEVICE, 
-    seed=42, 
-    use_official_adapters=False,
-    output_prefix="benchmark"
-):
-    set_seed(seed)
-    model = prepare_model_for_eval(model, device)
-
-    test_ds = test_loader.dataset
-    total_ds_len = len(test_ds)
-    n_eval = min(num_samples, total_ds_len) if num_samples else total_ds_len
 
 def get_stratified_indices(dataset, num_samples, seed=42):
     """
@@ -168,7 +167,7 @@ def get_stratified_indices(dataset, num_samples, seed=42):
     return final_indices
 
 # ==============================================================================
-# EXPERIMENTAL BENCHMARK ENGINE (GROUPS A, B, C)
+# BENCHMARK ENGINE (GROUPS A, B, C)
 # ==============================================================================
 def run_attack_benchmark_suite(
     model, 
@@ -178,7 +177,11 @@ def run_attack_benchmark_suite(
     device=DEVICE, 
     seed=42, 
     use_official_adapters=False,
-    output_prefix="benchmark"
+    output_prefix="benchmark",
+    protocol="paper",
+    cornersearch_mode="independent",
+    allow_untrained=False,
+    checkpoint_path=None
 ):
     set_seed(seed)
     model = prepare_model_for_eval(model, device)
@@ -202,6 +205,15 @@ def run_attack_benchmark_suite(
     eval_loader = DataLoader(test_subset, batch_size=eval_batch_size, shuffle=False, num_workers=0)
     logger.info(f"Evaluation DataLoader created with batch_size={eval_batch_size}, total_samples={len(test_subset)} (Indices MD5: {hashlib.md5(str(sampled_indices).encode()).hexdigest()[:8]})")
 
+    # Evaluate clean model accuracy on benchmark sample subset
+    clean_correct_total = 0
+    with torch.no_grad():
+        for x_c, y_c in eval_loader:
+            x_c, y_c = x_c.to(device), y_c.to(device)
+            preds = torch.argmax(model(x_c), dim=1)
+            clean_correct_total += (preds == y_c).sum().item()
+    clean_accuracy_pct = 100.0 * clean_correct_total / n_eval
+
     lpips_fn = None
     if lpips is not None:
         try:
@@ -215,19 +227,46 @@ def run_attack_benchmark_suite(
     results_list = []
     full_csv_path = os.path.join(METRICS_DIR, f"{output_prefix}_full_attack_metrics.csv")
 
-    # Save benchmark run metadata
+    # Reproducibility & Provenance Fingerprints
+    reproducibility = get_git_reproducibility_info()
+    ckpt_sha256 = compute_file_sha256(checkpoint_path) if checkpoint_path and os.path.exists(checkpoint_path) else None
+
+    if protocol == "paper" and reproducibility["git_dirty"]:
+        logger.warning("⚠️  WARNING: Benchmark is being executed from a DIRTY Git working tree! For paper releases, commit changes first.")
+
+    attacks_hyperparams_snapshot = {}
+
     metadata = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "seed": seed,
-        "num_samples": n_eval,
-        "use_official_adapters": use_official_adapters,
-        "device": str(device),
-        "device_name": get_device_name(device),
-        "cuda_device_name": get_device_name(device),
+        "protocol": {
+            "mode": protocol,
+            "cornersearch_mode": cornersearch_mode,
+            "k_values": K_VALUES,
+            "eval_batch_size": eval_batch_size,
+            "seed": seed,
+            "num_samples": n_eval,
+            "use_official_adapters": use_official_adapters,
+            "allow_untrained": allow_untrained,
+        },
+        "repo": {
+            "name": "nxc1802/AA_2",
+            "git_commit": reproducibility["git_commit"],
+            "git_dirty": reproducibility["git_dirty"]
+        },
+        "model": {
+            "architecture": getattr(model, "architecture_name", "resnet18"),
+            "dataset": "cifar10",
+            "checkpoint_filename": os.path.basename(checkpoint_path) if checkpoint_path else None,
+            "checkpoint_sha256": ckpt_sha256,
+            "clean_accuracy": round(clean_accuracy_pct, 2)
+        },
+        "hardware": {
+            "device": str(device),
+            "device_name": get_device_name(device)
+        },
         "sample_indices_md5": hashlib.md5(str(sampled_indices).encode()).hexdigest(),
+        "attacks_hyperparameters": attacks_hyperparams_snapshot
     }
-    with open(os.path.join(METRICS_DIR, f"{output_prefix}_metadata.json"), "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=4)
 
     # ==========================================================================
     # GROUP C: Non-pixel-K Attacks (Dense + Spectral Frequency Domain)
@@ -241,6 +280,19 @@ def run_attack_benchmark_suite(
     }
 
     for name, (attacker, source_label) in group_c_attacks.items():
+        if protocol == "paper" and not is_paper_eligible(name):
+            logger.info(f"Skipping Group C attack {name}: not paper-eligible (main_benchmark=false)")
+            continue
+
+        attacks_hyperparams_snapshot[name] = {
+            "group": "Group C",
+            "implementation": source_label,
+            "eps": getattr(attacker, "eps", None),
+            "alpha": getattr(attacker, "alpha", None),
+            "steps": getattr(attacker, "steps", None),
+            "freq_k": getattr(attacker, "freq_k", None)
+        }
+
         synchronize_device(device)
         t0 = time.time()
         
@@ -266,15 +318,17 @@ def run_attack_benchmark_suite(
             pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
-                total_steps += sum(attacker.last_steps)
+                batch_steps = sum(attacker.last_steps)
             else:
                 steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
-                total_steps += steps * B
+                batch_steps = steps * B
+            total_steps += batch_steps
 
             if hasattr(attacker, "last_queries"):
-                total_queries += sum(attacker.last_queries)
+                batch_queries = sum(attacker.last_queries)
             else:
-                total_queries += total_steps
+                batch_queries = batch_steps
+            total_queries += batch_queries
 
             if hasattr(attacker, "last_grad_evals"):
                 total_grad_evals += sum(attacker.last_grad_evals)
@@ -352,7 +406,7 @@ def run_attack_benchmark_suite(
         pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
     # ==========================================================================
-    # GROUP A: Direct K-Sweep Attacks (Budget Constrained)
+    # GROUP A: Direct K-Sweep Attacks (Explicit K-budget)
     # ==========================================================================
     logger.info("=== GROUP A: Direct K-Sweep Attacks (Explicit K-budget) ===")
     if use_official_adapters:
@@ -360,13 +414,15 @@ def run_attack_benchmark_suite(
             raise RuntimeError("Requested use_official_adapters=True, but official adapters failed to load!")
         logger.info(">>> Running Group A with Official Author Adapters (third_party)")
         group_a_factories = {
-            "JSMA": (lambda m, k, d: JSMAAttack(m, k=k, device=d), "custom-reimplementation"),
-            "OnePixel": (lambda m, k, d: OnePixelAttack(m, k=k, device=d), "custom-reimplementation"),
             "CornerSearch": (lambda m, k, d: CornerSearchOfficialAdapter(m, k=k, device=d), "official-adapter"),
             "PGD0": (lambda m, k, d: PGD0OfficialAdapter(m, k=k, device=d), "official-adapter"),
             "Sparse-PGD": (lambda m, k, d: SparsePGDOfficialAdapter(m, sparsity_budget=k, device=d), "official-adapter"),
             "Sparse-RS": (lambda m, k, d: SparseRSOfficialAdapter(m, n_pixels=k, device=d), "official-adapter"),
+            "SAIF": (lambda m, k, d: SAIFAttack(m, k=k, device=d), "custom-reimplementation"),
+            "IPFSA": (lambda m, k, d: IPFSAttack(m, k_pixels=k, device=d), "custom-reimplementation"),
+            "GradientGuidance": (lambda m, k, d: GradientGuidanceAttack(m, sparsity_budget=k, device=d), "custom-reimplementation"),
             "CPA": (lambda m, k, d: CooperativePixelsAttack(m, coalition_size=k, device=d), "ours"),
+            "FCSA": (lambda m, k, d: FunctionalCoalitionSparseAttack(m, max_coalition_size=k, device=d), "ours"),
             "FMSA-budgeted": (lambda m, k, d: FeatureToMinimalSupportAttack(m, support_budget=k, device=d), "ours")
         }
     else:
@@ -388,7 +444,22 @@ def run_attack_benchmark_suite(
         }
 
     for name, (factory, source_label) in group_a_factories.items():
-        if name == "CornerSearch":
+        if protocol == "paper" and not is_paper_eligible(name):
+            logger.info(f"Skipping Group A attack {name}: not paper-eligible (main_benchmark=false)")
+            continue
+
+        sample_attacker = factory(model, 15, device)
+        attacks_hyperparams_snapshot[name] = {
+            "group": "Group A",
+            "implementation": source_label,
+            "steps": getattr(sample_attacker, "steps", getattr(sample_attacker, "max_iter", None)),
+            "n_max": getattr(sample_attacker, "n_max", None),
+            "alpha": getattr(sample_attacker, "alpha", None),
+            "feature_weight": getattr(sample_attacker, "feature_weight", None),
+            "coalition_size": getattr(sample_attacker, "coalition_size", None)
+        }
+
+        if name == "CornerSearch" and cornersearch_mode == "progressive":
             K_max = max(K_VALUES)
             attacker = factory(model, K_max, device)
             synchronize_device(device)
@@ -416,15 +487,17 @@ def run_attack_benchmark_suite(
                 pure_attack_dt += (time.time() - t_att_start)
 
                 if hasattr(attacker, "last_steps"):
-                    total_steps += sum(attacker.last_steps)
+                    batch_steps = sum(attacker.last_steps)
                 else:
                     steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
-                    total_steps += steps * B
+                    batch_steps = steps * B
+                total_steps += batch_steps
 
                 if hasattr(attacker, "last_queries"):
-                    total_queries += sum(attacker.last_queries)
+                    batch_queries = sum(attacker.last_queries)
                 else:
-                    total_queries += total_steps
+                    batch_queries = batch_steps
+                total_queries += batch_queries
 
                 if hasattr(attacker, "last_grad_evals"):
                     total_grad_evals += sum(attacker.last_grad_evals)
@@ -530,15 +603,17 @@ def run_attack_benchmark_suite(
                     pure_attack_dt += (time.time() - t_att_start)
                     
                     if hasattr(attacker, "last_steps"):
-                        total_steps += sum(attacker.last_steps)
+                        batch_steps = sum(attacker.last_steps)
                     else:
                         steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
-                        total_steps += steps * B
+                        batch_steps = steps * B
+                    total_steps += batch_steps
 
                     if hasattr(attacker, "last_queries"):
-                        total_queries += sum(attacker.last_queries)
+                        batch_queries = sum(attacker.last_queries)
                     else:
-                        total_queries += total_steps
+                        batch_queries = batch_steps
+                    total_queries += batch_queries
 
                     if hasattr(attacker, "last_grad_evals"):
                         total_grad_evals += sum(attacker.last_grad_evals)
@@ -626,7 +701,7 @@ def run_attack_benchmark_suite(
         group_b_attacks = {
             "SparseFool": (SparseFoolOfficialAdapter(model, k=250, steps=50, device=device), "official-adapter"),
             "SigmaZero": (SigmaZeroOfficialAdapter(model, steps=50, device=device), "official-adapter"),
-            "Homotopy": (HomotopyOfficialAdapter(model, target_sparsity=250, steps=50, device=device), "official-adapter"),
+            "Homotopy": (HomotopyOfficialAdapter(model, target_sparsity=250, steps=50, device=device), "modified-upstream-adapter"),
             "GSE": (GSEOfficialAdapter(model, group_size=4, max_groups=64, steps=50, device=device), "official-adapter"),
             "Pixle": (PixleAttack(model, n_swaps=20, max_trials=50, device=device), "custom-reimplementation"),
             "FMSA-minimal-support": (FeatureToMinimalSupportAttack(model, support_budget=250, device=device), "ours")
@@ -642,6 +717,19 @@ def run_attack_benchmark_suite(
         }
 
     for name, (attacker, source_label) in group_b_attacks.items():
+        if protocol == "paper" and not is_paper_eligible(name):
+            logger.info(f"Skipping Group B attack {name}: not paper-eligible (main_benchmark=false)")
+            continue
+
+        attacks_hyperparams_snapshot[name] = {
+            "group": "Group B",
+            "implementation": source_label,
+            "steps": getattr(attacker, "steps", getattr(attacker, "max_iter", None)),
+            "k": getattr(attacker, "k", getattr(attacker, "target_sparsity", None)),
+            "group_size": getattr(attacker, "group_size", None),
+            "max_groups": getattr(attacker, "max_groups", None)
+        }
+
         synchronize_device(device)
         t0 = time.time()
         
@@ -667,15 +755,17 @@ def run_attack_benchmark_suite(
             pure_attack_dt += (time.time() - t_att_start)
             
             if hasattr(attacker, "last_steps"):
-                total_steps += sum(attacker.last_steps)
+                batch_steps = sum(attacker.last_steps)
             else:
                 steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
-                total_steps += steps * B
+                batch_steps = steps * B
+            total_steps += batch_steps
 
             if hasattr(attacker, "last_queries"):
-                total_queries += sum(attacker.last_queries)
+                batch_queries = sum(attacker.last_queries)
             else:
-                total_queries += total_steps
+                batch_queries = batch_steps
+            total_queries += batch_queries
 
             if hasattr(attacker, "last_grad_evals"):
                 total_grad_evals += sum(attacker.last_grad_evals)
@@ -756,6 +846,10 @@ def run_attack_benchmark_suite(
             results_list.append(res)
             pd.DataFrame(results_list).to_csv(full_csv_path, index=False)
 
+    # Save final complete metadata
+    with open(os.path.join(METRICS_DIR, f"{output_prefix}_metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=4)
+
     df_all = pd.DataFrame(results_list)
     df_all.to_csv(full_csv_path, index=False)
     
@@ -771,8 +865,10 @@ if __name__ == "__main__":
     output_prefix = sys.argv[2] if len(sys.argv) > 2 else "local_test_10"
     use_official = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
     allow_untrained = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
+    protocol = sys.argv[5].lower() if len(sys.argv) > 5 else "paper"
+    cornersearch_mode = sys.argv[6].lower() if len(sys.argv) > 6 else "independent"
     
-    logger.info(f"Benchmark configured with num_samples={num_samples}, output_prefix='{output_prefix}', use_official_adapters={use_official}, allow_untrained={allow_untrained}")
+    logger.info(f"Benchmark configured with num_samples={num_samples}, output_prefix='{output_prefix}', use_official_adapters={use_official}, allow_untrained={allow_untrained}, protocol='{protocol}', cornersearch_mode='{cornersearch_mode}'")
     ckpt = find_existing_checkpoint("resnet18_cifar10_best.pth")
     if not ckpt and not allow_untrained:
         raise FileNotFoundError(
@@ -790,6 +886,10 @@ if __name__ == "__main__":
         num_samples=num_samples, 
         device=DEVICE, 
         use_official_adapters=use_official,
-        output_prefix=output_prefix
+        output_prefix=output_prefix,
+        protocol=protocol,
+        cornersearch_mode=cornersearch_mode,
+        allow_untrained=allow_untrained,
+        checkpoint_path=ckpt
     )
     logger.info(f"\n{df_results.to_string(index=False)}")

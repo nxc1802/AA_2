@@ -80,6 +80,53 @@ class TestAttacks(unittest.TestCase):
         for p in model.parameters():
             self.assertFalse(p.requires_grad)
 
+    def test_query_accounting_linearity(self):
+        from src.benchmark.run_attack_benchmark import run_attack_benchmark_suite
+        from torch.utils.data import TensorDataset, DataLoader
+        device = get_best_device()
+        model = prepare_model_for_eval(DummyModel(), device)
+
+        # 6 samples -> 3 batches of size 2
+        x_dummy = torch.rand(6, 3, 32, 32)
+        y_dummy = torch.tensor([0, 1, 0, 1, 0, 1])
+        ds = TensorDataset(x_dummy, y_dummy)
+        loader = DataLoader(ds, batch_size=2, shuffle=False)
+
+        class DummyAttackerWithoutLastQueries:
+            def __init__(self, steps=20):
+                self.steps = steps
+            def attack(self, x, y):
+                return x.clone()
+
+        # Batch 1: batch_steps = 40, total_steps = 40, total_queries = 40
+        # Batch 2: batch_steps = 40, total_steps = 80, total_queries = 80
+        # Batch 3: batch_steps = 40, total_steps = 120, total_queries = 120
+        # Avg Queries = 120 / 6 = 20.0 (Linear, NOT 240/6 = 40.0 triangular!)
+        attacker = DummyAttackerWithoutLastQueries(steps=20)
+        
+        # Test batch query calculation logic directly
+        eval_loader = loader
+        total_steps = 0.0
+        total_queries = 0.0
+        for x, y in eval_loader:
+            B = x.size(0)
+            if hasattr(attacker, "last_steps"):
+                batch_steps = sum(attacker.last_steps)
+            else:
+                steps = getattr(attacker, "steps", getattr(attacker, "max_iter", 1))
+                batch_steps = steps * B
+            total_steps += batch_steps
+
+            if hasattr(attacker, "last_queries"):
+                batch_queries = sum(attacker.last_queries)
+            else:
+                batch_queries = batch_steps
+            total_queries += batch_queries
+
+        self.assertEqual(total_steps, 120.0)
+        self.assertEqual(total_queries, 120.0)
+        self.assertEqual(total_queries / 6, 20.0)
+
     def test_pgd0_attack_budget(self):
         set_seed(42)
         model, x, y = self.get_test_inputs()

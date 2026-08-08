@@ -62,3 +62,23 @@ def test_third_party_document_has_no_generic_github_placeholders():
     # The old provenance table used bare https://github.com/ placeholders.
     assert "`https://github.com/`" not in text
     assert "(https://github.com/)" not in text
+
+
+def test_modified_upstream_adapter_commit_must_be_null_or_unpinned():
+    attacks = _load_attacks()
+    for name, meta in attacks.items():
+        if meta.get("implementation") == "modified-upstream-adapter":
+            assert meta.get("upstream_commit") is None, (
+                f"{name} is marked modified-upstream-adapter but claims an exact upstream_commit SHA"
+            )
+
+
+def test_paper_protocol_main_benchmark_gate():
+    from src.benchmark.run_attack_benchmark import is_paper_eligible
+    attacks = _load_attacks()
+    for name, meta in attacks.items():
+        main_bm = meta.get("main_benchmark", False)
+        eligible = is_paper_eligible(name)
+        assert eligible == main_bm, (
+            f"Mismatch for {name}: registry main_benchmark={main_bm} but is_paper_eligible={eligible}"
+        )

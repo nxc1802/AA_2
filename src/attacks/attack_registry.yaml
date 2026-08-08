@@ -268,12 +268,12 @@ attacks:
     paper: "Sparse and Imperceptible Adversarial Attack via a Homotopy Algorithm"
     year: 2021
     venue: "ICML"
-    implementation: "official-adapter"
+    implementation: "modified-upstream-adapter"
     validation_status: "appendix-pending-snapshot-validation"
     main_benchmark: false
     official_repo: "third_party/sparseadv_homotopy"
     upstream_repo: "https://github.com/VITA-Group/SparseADV_Homotopy"
-    upstream_commit: "1bed5c19e0f2696ecdfb72c602d2478682a71c1d"
+    upstream_commit: null
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"

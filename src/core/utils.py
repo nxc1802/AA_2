@@ -69,3 +69,43 @@ def prepare_model_for_eval(model: nn.Module, device: torch.device = None) -> nn.
     for param in model.parameters():
         param.requires_grad_(False)
     return model
+
+
+def compute_file_sha256(filepath: str) -> str:
+    """Computes SHA256 checksum of a file in 1MB chunks."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def get_git_reproducibility_info(repo_dir: str = None) -> dict:
+    """
+    Returns current Git commit SHA and working tree dirty status for reproducibility metadata.
+    """
+    import subprocess
+    import os
+
+    if repo_dir is None:
+        repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+
+    try:
+        commit_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo_dir, stderr=subprocess.DEVNULL
+        ).decode("utf-8").strip()
+
+        status_output = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=repo_dir, stderr=subprocess.DEVNULL
+        ).decode("utf-8").strip()
+
+        is_dirty = len(status_output) > 0
+    except Exception:
+        commit_sha = "unknown"
+        is_dirty = True
+
+    return {
+        "git_commit": commit_sha,
+        "git_dirty": is_dirty
+    }

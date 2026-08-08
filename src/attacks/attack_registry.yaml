@@ -1,4 +1,8 @@
 # Attack Registry Metadata for AA_2 Benchmark Project
+#
+# `main_benchmark` is a scientific-validity gate, not an execution toggle.
+# false means the implementation may still run, but must not support a main-table
+# claim until the validation blocker in docs/baseline_validation.md is resolved.
 
 attacks:
   # Group C: Non-pixel-K Attacks
@@ -8,6 +12,8 @@ attacks:
     year: 2015
     venue: "ICLR"
     implementation: "custom-reimplementation"
+    validation_status: "canonical-reference"
+    main_benchmark: true
     constraint: "L_inf"
     budget_mode: "epsilon"
     threat_model: "white-box"
@@ -18,6 +24,8 @@ attacks:
     year: 2016
     venue: "ICLR Workshop"
     implementation: "custom-reimplementation"
+    validation_status: "canonical-reference"
+    main_benchmark: true
     constraint: "L_inf"
     budget_mode: "epsilon"
     threat_model: "white-box"
@@ -28,16 +36,20 @@ attacks:
     year: 2018
     venue: "ICLR"
     implementation: "custom-reimplementation"
+    validation_status: "canonical-reference"
+    main_benchmark: true
     constraint: "L_inf"
     budget_mode: "epsilon"
     threat_model: "white-box"
 
   SFA:
     name: "Spectral Frequency Attack"
-    paper: "Frequency Domain Adversarial Attacks"
-    year: 2021
-    venue: "CVPR"
+    paper: null
+    year: null
+    venue: null
     implementation: "custom-reimplementation"
+    validation_status: "unverified-paper-identity"
+    main_benchmark: false
     constraint: "Frequency Budget"
     budget_mode: "freq_k"
     threat_model: "white-box"
@@ -49,6 +61,8 @@ attacks:
     year: 2016
     venue: "IEEE EuroS&P"
     implementation: "custom-reimplementation"
+    validation_status: "appendix-pending-reproduction"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -59,6 +73,8 @@ attacks:
     year: 2019
     venue: "IEEE TEVC"
     implementation: "custom-reimplementation"
+    validation_status: "appendix-pending-reproduction"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "black-box"
@@ -69,17 +85,23 @@ attacks:
     year: 2019
     venue: "ICCV"
     implementation: "official-adapter"
+    validation_status: "official-author-code"
+    main_benchmark: true
     official_repo: "third_party/sparse_imperceivable_attacks"
+    upstream_repo: "https://github.com/fra31/sparse-imperceivable-attacks"
+    upstream_commit: "57c23ead05803a631c332be93f824ebd8020385d"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "black-box"
 
   SAIF:
-    name: "Sparsity-Aware Iterative Fast Attack"
-    paper: "Sparse Adversarial Attacks via Iterative Saliency Projection"
-    year: 2021
-    venue: "ICCV"
+    name: "SAIF: Sparse Adversarial and Imperceptible Attack Framework"
+    paper: "SAIF: Sparse Adversarial and Imperceptible Attack Framework"
+    year: 2025
+    venue: "TMLR"
     implementation: "custom-reimplementation"
+    validation_status: "unverified-reimplementation"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -90,7 +112,11 @@ attacks:
     year: 2019
     venue: "ICCV"
     implementation: "official-adapter"
+    validation_status: "official-author-code"
+    main_benchmark: true
     official_repo: "third_party/sparse_imperceivable_attacks"
+    upstream_repo: "https://github.com/fra31/sparse-imperceivable-attacks"
+    upstream_commit: "57c23ead05803a631c332be93f824ebd8020385d"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -101,7 +127,11 @@ attacks:
     year: 2024
     venue: "ICML"
     implementation: "official-adapter"
+    validation_status: "official-author-code"
+    main_benchmark: true
     official_repo: "third_party/spgd"
+    upstream_repo: "https://github.com/CityU-MLO/sPGD"
+    upstream_commit: "37564941d11a9a72c4c4fa2b07299f30dae26154"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -112,7 +142,11 @@ attacks:
     year: 2022
     venue: "AAAI"
     implementation: "official-adapter"
+    validation_status: "official-author-code-exact-tree"
+    main_benchmark: true
     official_repo: "third_party/sparse_rs"
+    upstream_repo: "https://github.com/fra31/sparse-rs"
+    upstream_commit: "21d875969a1455e4d5b26dcf32c843e6262d1f9c"
     constraint: "L0"
     budget_mode: "K"
     threat_model: "black-box"
@@ -123,26 +157,32 @@ attacks:
     year: 2024
     venue: "ICLR"
     implementation: "custom-reimplementation"
+    validation_status: "appendix-pending-reproduction"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "black-box"
 
   IPFSA:
-    name: "Integrated Saliency Feature Attack"
-    paper: "Attention-Guided Sparse Adversarial Attack"
-    year: 2023
-    venue: "ICCV"
+    name: "IPFSA"
+    paper: null
+    year: null
+    venue: null
     implementation: "custom-reimplementation"
+    validation_status: "unverified-paper-identity"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
 
   GradientGuidance:
     name: "Gradient Guidance Attack"
-    paper: "Gradient Saliency Sparse Perturbation"
-    year: 2022
-    venue: "ECCV"
+    paper: null
+    year: null
+    venue: null
     implementation: "custom-reimplementation"
+    validation_status: "unverified-paper-identity"
+    main_benchmark: false
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -153,6 +193,8 @@ attacks:
     paper: "Proposed Method"
     year: 2026
     implementation: "ours"
+    validation_status: "proposed"
+    main_benchmark: true
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -162,6 +204,8 @@ attacks:
     paper: "Proposed Method"
     year: 2026
     implementation: "ours"
+    validation_status: "proposed"
+    main_benchmark: true
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -171,6 +215,8 @@ attacks:
     paper: "Proposed Method"
     year: 2026
     implementation: "ours"
+    validation_status: "proposed"
+    main_benchmark: true
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -180,6 +226,8 @@ attacks:
     paper: "Proposed Method"
     year: 2026
     implementation: "ours"
+    validation_status: "proposed"
+    main_benchmark: true
     constraint: "L0"
     budget_mode: "K"
     threat_model: "white-box"
@@ -191,40 +239,56 @@ attacks:
     year: 2019
     venue: "CVPR"
     implementation: "official-adapter"
+    validation_status: "official-author-code"
+    main_benchmark: true
     official_repo: "third_party/sparsefool"
+    upstream_repo: "https://github.com/LTS4/SparseFool"
+    upstream_commit: "958e2bf663ea4b22ecc7a24dcf226a9fab77124f"
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"
 
   SigmaZero:
     name: "Sigma-Zero Attack"
-    paper: "Sigma-Zero: Minimum-support Sparse Adversarial Attack"
+    paper: "Sigma-Zero: Gradient-based Optimization of L0-norm Adversarial Examples"
     year: 2025
     venue: "ICLR"
     implementation: "official-adapter"
+    validation_status: "official-author-code"
+    main_benchmark: true
     official_repo: "third_party/sigma_zero"
+    upstream_repo: "https://github.com/sigma0-advx/sigma-zero"
+    upstream_commit: "f59494ca5fdb8f041e618381eb925e0bec00b01e"
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"
 
   Homotopy:
     name: "Homotopy Sparse Attack"
-    paper: "Homotopy Optimization for L0 Adversarial Attacks"
+    paper: "Sparse and Imperceptible Adversarial Attack via a Homotopy Algorithm"
     year: 2021
-    venue: "NeurIPS"
+    venue: "ICML"
     implementation: "official-adapter"
+    validation_status: "appendix-pending-snapshot-validation"
+    main_benchmark: false
     official_repo: "third_party/sparseadv_homotopy"
+    upstream_repo: "https://github.com/VITA-Group/SparseADV_Homotopy"
+    upstream_commit: null
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"
 
   GSE:
-    name: "Group Sparse Estimation Attack"
-    paper: "GSE: Group-Wise Sparse and Explainable Adversarial Attacks"
+    name: "GSE: Group-wise Sparse and Explainable Adversarial Attacks"
+    paper: "GSE: Group-wise Sparse and Explainable Adversarial Attacks"
     year: 2025
     venue: "ICLR"
     implementation: "official-adapter"
+    validation_status: "official-author-code-exact-tree"
+    main_benchmark: true
     official_repo: "third_party/gse"
+    upstream_repo: "https://github.com/wagnermoritz/GSE"
+    upstream_commit: "0123cdf6b88f9313f40886aa13631dc82ff43874"
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "white-box"
@@ -235,6 +299,8 @@ attacks:
     year: 2022
     venue: "WACV"
     implementation: "custom-reimplementation"
+    validation_status: "appendix-pending-reproduction"
+    main_benchmark: false
     constraint: "Minimal Support"
     budget_mode: "unconstrained"
     threat_model: "black-box"

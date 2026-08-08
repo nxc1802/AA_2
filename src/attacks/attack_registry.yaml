@@ -269,8 +269,8 @@ attacks:
     year: 2021
     venue: "ICML"
     implementation: "official-adapter"
-    validation_status: "official-author-code-vendored-snapshot-modified"
-    main_benchmark: true
+    validation_status: "appendix-pending-snapshot-validation"
+    main_benchmark: false
     official_repo: "third_party/sparseadv_homotopy"
     upstream_repo: "https://github.com/VITA-Group/SparseADV_Homotopy"
     upstream_commit: null
@@ -279,10 +279,10 @@ attacks:
     threat_model: "white-box"
 
   GSE:
-    name: "Group-wise Sparse and Explainable Adversarial Attack"
-    paper: "Group-wise Sparse and Explainable Adversarial Attacks"
-    year: 2024
-    venue: "Machine Learning"
+    name: "GSE: Group-wise Sparse and Explainable Adversarial Attacks"
+    paper: "GSE: Group-wise Sparse and Explainable Adversarial Attacks"
+    year: 2025
+    venue: "ICLR"
     implementation: "official-adapter"
     validation_status: "official-author-code-exact-tree"
     main_benchmark: true

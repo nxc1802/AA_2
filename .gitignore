@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
 
 # Large model weights / checkpoints
 *.pth
@@ -15,6 +16,7 @@ resnet18_cifar10_best.pth
 .vscode/
 .idea/
 *.swp
+.pytest_cache/
 
 # Virtual Environment
 venv/

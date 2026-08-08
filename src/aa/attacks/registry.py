@@ -1,0 +1,51 @@
+import inspect
+from dataclasses import dataclass
+from typing import Callable, Dict, Any
+import torch.nn as nn
+
+from aa.attacks.base import Attack
+from aa.attacks.dense import FGSM, BIM, PGD
+from aa.attacks.proposed import SparseFeatureAttack
+from aa.attacks.external.cornersearch import CornerSearch
+from aa.attacks.external.pgd0 import PGD0
+from aa.attacks.external.spgd import SparsePGD
+from aa.attacks.external.sparse_rs import SparseRS
+from aa.attacks.external.sparsefool import SparseFool
+from aa.attacks.external.sigma_zero import SigmaZero
+from aa.attacks.external.gse import GSE
+
+
+@dataclass
+class AttackSpec:
+    name: str
+    factory: Callable[..., Attack]
+    mode: str  # "dense" | "budget" | "minimal"
+
+
+ATTACK_REGISTRY: Dict[str, AttackSpec] = {
+    "fgsm": AttackSpec(name="FGSM", factory=FGSM, mode="dense"),
+    "bim": AttackSpec(name="BIM", factory=BIM, mode="dense"),
+    "pgd": AttackSpec(name="PGD", factory=PGD, mode="dense"),
+    "cornersearch": AttackSpec(name="CornerSearch", factory=CornerSearch, mode="budget"),
+    "pgd0": AttackSpec(name="PGD0", factory=PGD0, mode="budget"),
+    "spgd": AttackSpec(name="Sparse-PGD", factory=SparsePGD, mode="budget"),
+    "sparse_rs": AttackSpec(name="Sparse-RS", factory=SparseRS, mode="budget"),
+    "sparsefool": AttackSpec(name="SparseFool", factory=SparseFool, mode="minimal"),
+    "sigma_zero": AttackSpec(name="Sigma-Zero", factory=SigmaZero, mode="minimal"),
+    "gse": AttackSpec(name="GSE", factory=GSE, mode="minimal"),
+    "ours": AttackSpec(name="Ours", factory=SparseFeatureAttack, mode="budget"),
+}
+
+
+def create_attack(name: str, model: nn.Module, **kwargs) -> Attack:
+    """Instantiates an attack by name from the registry, filtering unsupported kwargs."""
+    key = name.lower()
+    if key not in ATTACK_REGISTRY:
+        raise ValueError(f"Attack '{name}' not found in registry. Options: {list(ATTACK_REGISTRY.keys())}")
+    spec = ATTACK_REGISTRY[key]
+
+    sig = inspect.signature(spec.factory.__init__)
+    valid_params = set(sig.parameters.keys()) - {"self", "model"}
+
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+    return spec.factory(model=model, **filtered_kwargs)

@@ -1,0 +1,24 @@
+seed: 42
+
+dataset:
+  name: cifar10
+  samples: 100
+  batch_size: 64
+
+model:
+  name: resnet18
+  checkpoint: resnet18_cifar10_best.pth
+
+benchmark:
+  k_values: [1, 2, 4, 8, 16, 32, 64]
+
+attacks:
+  - pgd
+  - cornersearch
+  - pgd0
+  - spgd
+  - sparse_rs
+  - sparsefool
+  - sigma_zero
+  - gse
+  - ours

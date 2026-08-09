@@ -13,10 +13,10 @@ class FGSM(Attack):
         x_adv = x.clone().detach().requires_grad_(True)
         outputs = self.model(x_adv)
         loss = self.criterion(outputs, y)
-        loss.backward()
+        grad = torch.autograd.grad(loss, x_adv, only_inputs=True)[0]
 
         with torch.no_grad():
-            grad_sign = x_adv.grad.sign()
+            grad_sign = grad.sign()
             x_adv = torch.clamp(x + self.eps * grad_sign, 0.0, 1.0)
 
         return AttackOutput(x_adv=x_adv.detach(), forward_evals=1, backward_evals=1)
@@ -37,10 +37,10 @@ class BIM(Attack):
             x_adv.requires_grad_(True)
             outputs = self.model(x_adv)
             loss = self.criterion(outputs, y)
-            loss.backward()
+            grad = torch.autograd.grad(loss, x_adv, only_inputs=True)[0]
 
             with torch.no_grad():
-                grad_sign = x_adv.grad.sign()
+                grad_sign = grad.sign()
                 x_adv = x_adv + self.alpha * grad_sign
                 eta = torch.clamp(x_adv - x, min=-self.eps, max=self.eps)
                 x_adv = torch.clamp(x + eta, 0.0, 1.0)
@@ -79,10 +79,10 @@ class PGD(Attack):
             x_adv.requires_grad_(True)
             outputs = self.model(x_adv)
             loss = self.criterion(outputs, y)
-            loss.backward()
+            grad = torch.autograd.grad(loss, x_adv, only_inputs=True)[0]
 
             with torch.no_grad():
-                grad_sign = x_adv.grad.sign()
+                grad_sign = grad.sign()
                 x_adv = x_adv + self.alpha * grad_sign
                 eta = torch.clamp(x_adv - x, min=-self.eps, max=self.eps)
                 x_adv = torch.clamp(x + eta, 0.0, 1.0)

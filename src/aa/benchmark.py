@@ -89,7 +89,7 @@ def evaluate_attack(
 
     clean_acc = 100.0 * clean_correct_count / total_samples if total_samples > 0 else 0.0
     full_set_robust_acc = 100.0 * adv_corr_cat.float().mean().item() if total_samples > 0 else 0.0
-    cond_robust_acc = 100.0 * (clean_correct_count - succ_count) / total_samples if total_samples > 0 else 0.0
+    cond_robust_acc = 100.0 * (clean_correct_count - succ_count) / clean_correct_count if clean_correct_count > 0 else 0.0
     asr = 100.0 * succ_count / clean_correct_count if clean_correct_count > 0 else 0.0
 
     distortion_m = compute_distortion_metrics(
@@ -141,7 +141,7 @@ def derive_minimal_asr_curve(eval_res: Dict[str, Any], k_values: List[int]) -> D
         k_succ = succ_list & (l0_list <= k)
         k_succ_count = k_succ.sum().item()
         k_asr = 100.0 * k_succ_count / clean_correct_count if clean_correct_count > 0 else 0.0
-        k_robust_acc = 100.0 * (clean_correct_count - k_succ_count) / total_samples if total_samples > 0 else 0.0
+        k_robust_acc = 100.0 * (clean_correct_count - k_succ_count) / clean_correct_count if clean_correct_count > 0 else 0.0
 
         derived = dict(eval_res)
         derived["success_count"] = k_succ_count

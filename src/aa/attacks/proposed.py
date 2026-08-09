@@ -19,7 +19,18 @@ class FeatureExtractorAdapter:
 
     def _attach_hook(self):
         target_layer = None
-        if self.layer_name and hasattr(self.model, self.layer_name):
+        # Unwrap DefendedModelAdapter or similar wrappers
+        base_model = getattr(self.model, "model", self.model)
+        if self.layer_name and hasattr(base_model, self.layer_name):
+            target_layer = getattr(base_model, self.layer_name)
+        elif hasattr(base_model, "layer4"):
+            target_layer = base_model.layer4
+        elif hasattr(base_model, "block3"):
+            target_layer = base_model.block3
+        elif hasattr(base_model, "features"):
+            target_layer = base_model.features
+        # Fallback: try on the original model object
+        elif self.layer_name and hasattr(self.model, self.layer_name):
             target_layer = getattr(self.model, self.layer_name)
         elif hasattr(self.model, "layer4"):
             target_layer = self.model.layer4
@@ -35,7 +46,8 @@ class FeatureExtractorAdapter:
         elif self.required:
             raise ValueError(
                 f"Feature guidance requested (layer_name='{self.layer_name}') but no valid intermediate feature layer "
-                f"('layer4', 'block3', or 'features') was found on model {type(self.model).__name__}."
+                f"('layer4', 'block3', or 'features') was found on model {type(self.model).__name__} "
+                f"or its wrapped base model {type(base_model).__name__}."
             )
 
     def remove(self):
@@ -93,24 +105,35 @@ class SparseFeatureAttack(Attack):
 
         if self.interaction_mode == "cpa":
             # Directional Cooperation: I(i) = ||g_i||_1 + coop_weight * sum_{j in N(i)} relu(cos(g_i, g_j)) * ||g_j||_1
+            # Uses zero-padding + shifted slicing to avoid circular boundary artifacts from torch.roll.
             grad_norm = grad.norm(p=2, dim=1, keepdim=True) + 1e-8
-            grad_unit = grad / grad_norm
+            grad_unit = grad / grad_norm  # (B, C, H, W)
             coop_score = grad_mag.clone()
+            # 8-connectivity neighbors via explicit padding
+            # pad: (left, right, top, bottom)
+            grad_unit_pad = F.pad(grad_unit, (1, 1, 1, 1), mode="constant", value=0.0)  # (B,C,H+2,W+2)
+            grad_mag_pad  = F.pad(grad_mag,  (1, 1, 1, 1), mode="constant", value=0.0)  # (B,1,H+2,W+2)
             shifts = [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]
             for dh, dw in shifts:
-                unit_shift = torch.roll(grad_unit, shifts=(dh, dw), dims=(2, 3))
-                mag_shift = torch.roll(grad_mag, shifts=(dh, dw), dims=(2, 3))
+                # Slice the padded tensor to get neighbor at offset (dh, dw)
+                sh = 1 + dh  # shifted start row in padded tensor
+                sw = 1 + dw  # shifted start col in padded tensor
+                unit_shift = grad_unit_pad[:, :, sh:sh+H, sw:sw+W]
+                mag_shift  = grad_mag_pad[:,  :, sh:sh+H, sw:sw+W]
                 alignment = (grad_unit * unit_shift).sum(dim=1, keepdim=True)
                 coop_score += self.coop_weight * F.relu(alignment) * mag_shift
             return coop_score
 
         elif self.interaction_mode == "fcsa":
-            # Functional Coalition Synergy: Score = indiv + 0.5 * synergy
+            # Functional Coalition Synergy:
+            # synergy(i) = relu(max over 3x3 patch - mean over 3x3 patch)
+            # patch_max captures the strongest contributor; patch_mean is the average.
+            # When max > mean, the pixel benefits from a strong coalition partner.
             grad_max = grad.abs().max(dim=1, keepdim=True)[0]
             indiv_contrib = grad_mag * grad_max
-            patch_contrib = F.avg_pool2d(indiv_contrib, kernel_size=3, stride=1, padding=1) * 9.0
-            sum_indiv = F.avg_pool2d(indiv_contrib, kernel_size=3, stride=1, padding=1) * 9.0
-            synergy = F.relu(patch_contrib - sum_indiv)
+            patch_max  = F.max_pool2d(indiv_contrib, kernel_size=3, stride=1, padding=1)
+            patch_mean = F.avg_pool2d(indiv_contrib, kernel_size=3, stride=1, padding=1)
+            synergy = F.relu(patch_max - patch_mean)
             return indiv_contrib + 0.5 * synergy
 
         elif self.interaction_mode == "hsa":

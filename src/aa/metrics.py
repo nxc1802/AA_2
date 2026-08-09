@@ -5,12 +5,14 @@ from typing import Optional, Dict, Any, NamedTuple
 
 class BatchMetrics(NamedTuple):
     clean_correct: torch.Tensor
+    adv_correct: torch.Tensor
     success: torch.Tensor
     l0: torch.Tensor
     l2: torch.Tensor
     linf: torch.Tensor
     psnr: torch.Tensor
     ssim: torch.Tensor
+    lpips: Optional[torch.Tensor]
 
 
 def compute_spatial_l0(delta: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:

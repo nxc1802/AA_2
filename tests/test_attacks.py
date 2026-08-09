@@ -7,10 +7,11 @@ from aa.metrics import compute_spatial_l0
 class DummyModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv = nn.Conv2d(3, 10, kernel_size=3, padding=1)
+        # layer4 is needed for FeatureExtractorAdapter hook (feature_guidance=True default)
+        self.layer4 = nn.Conv2d(3, 10, kernel_size=3, padding=1)
 
     def forward(self, x):
-        return self.conv(x).mean(dim=[2, 3])
+        return self.layer4(x).mean(dim=[2, 3])
 
 
 def test_attacks_contract():

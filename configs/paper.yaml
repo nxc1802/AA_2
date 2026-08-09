@@ -2,7 +2,7 @@ seed: 42
 
 dataset:
   name: cifar10
-  samples: 100
+  samples: 10
   batch_size: 64
 
 model:
@@ -20,6 +20,8 @@ defense_attacks:
 defense_k: 16
 
 attacks:
+  - fgsm
+  - bim
   - pgd
   - cornersearch
   - pgd0

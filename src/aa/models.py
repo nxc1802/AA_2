@@ -123,11 +123,13 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
 
     # Download from Hugging Face
     try:
+        from huggingface_hub import get_token
+        token = HF_TOKEN or get_token()
         hf_path = hf_hub_download(
             repo_id=HF_REPO_ID,
             filename=f"models/{filename}",
             repo_type="dataset",
-            token=HF_TOKEN
+            token=token
         )
         if hf_path and os.path.isfile(hf_path):
             return hf_path
@@ -135,6 +137,32 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
         pass
 
     return None
+
+
+def upload_checkpoint_to_hf(checkpoint_path: str, path_in_repo: Optional[str] = None, repo_id: str = HF_REPO_ID) -> str:
+    """Uploads a trained model checkpoint file to Hugging Face dataset repository."""
+    from huggingface_hub import HfApi, get_token
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint file to upload not found: {checkpoint_path}")
+
+    token = HF_TOKEN or get_token()
+    if not token:
+        raise ValueError("Hugging Face authentication token not found. Set HF_TOKEN environment variable or run `huggingface-cli login`.")
+
+    filename = os.path.basename(checkpoint_path)
+    if path_in_repo is None:
+        path_in_repo = f"models/{filename}"
+
+    api = HfApi(token=token)
+    api.upload_file(
+        path_or_fileobj=checkpoint_path,
+        path_in_repo=path_in_repo,
+        repo_id=repo_id,
+        repo_type="dataset"
+    )
+    url = f"https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}"
+    print(f"Successfully uploaded {checkpoint_path} to {url}")
+    return url
 
 
 def get_model(

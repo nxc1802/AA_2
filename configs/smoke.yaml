@@ -1,0 +1,83 @@
+# smoke.yaml — Fast sanity check config (10 samples, minimal steps)
+# Use for: CI, quick iteration, debugging
+# NOT suitable for paper results.
+
+seed: 42
+
+dataset:
+  name: cifar10
+  samples: 10
+  batch_size: 10
+
+model:
+  name: resnet18
+  checkpoint: resnet18_cifar10_best.pth
+
+benchmark:
+  k_values: [1, 2, 4, 8, 16, 32, 64]
+
+defense_attacks:
+  - pgd0
+  - sparse_rs
+  - ours
+
+defense_k: 16
+
+attacks:
+  - fgsm
+  - bim
+  - pgd
+  - cornersearch
+  - pgd0
+  - spgd
+  - sparse_rs
+  - sparsefool
+  - sigma_zero
+  - gse
+  - ours
+
+attacks_kwargs:
+  pgd:
+    eps: 0.031372549  # 8/255
+    alpha: 0.007843137  # 2/255
+    steps: 20
+    random_start: true
+
+  fgsm:
+    eps: 0.031372549  # 8/255
+
+  bim:
+    eps: 0.031372549  # 8/255
+    alpha: 0.007843137  # 2/255
+    steps: 10
+
+  cornersearch:
+    max_k: 64
+
+  pgd0:
+    steps: 20  # reduced for smoke
+
+  spgd:
+    steps: 20  # reduced for smoke
+
+  sparse_rs:
+    n_queries: 200  # reduced for smoke
+
+  sparsefool:
+    max_iter: 10  # reduced for smoke
+
+  sigma_zero:
+    steps: 50  # reduced for smoke
+
+  gse:
+    max_evals: 100  # reduced for smoke
+
+  ours:
+    steps: 5  # reduced for smoke
+    alpha: 0.015686274  # 4/255
+    feature_weight: 1.0
+    feature_guidance: true
+    interaction: true
+    interaction_mode: cpa
+    pruning: true
+    pruning_max_passes: 2  # reduced for smoke

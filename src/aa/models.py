@@ -124,7 +124,8 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
 
 def get_model(
     model_name: str = "resnet18",
-    num_classes: int = 10,
+    num_classes: Optional[int] = None,
+    dataset_name: Optional[str] = None,
     pretrained: bool = False,
     checkpoint_path: Optional[str] = None,
     device: Optional[torch.device] = None,
@@ -135,6 +136,15 @@ def get_model(
 ) -> nn.Module:
     """Instantiates neural network backbones and loads checkpoints strictly."""
     from aa.utils import compute_file_sha256
+    from aa.data import get_dataset_spec
+
+    if dataset_name is not None:
+        spec = get_dataset_spec(dataset_name)
+        if num_classes is None:
+            num_classes = spec["num_classes"]
+    elif num_classes is None:
+        num_classes = 10
+
     if device is None:
         device = get_best_device()
 
@@ -155,7 +165,8 @@ def get_model(
         raise ValueError(f"Unsupported model architecture: {model_name}")
 
     if checkpoint_path is None:
-        checkpoint_path = f"{name_clean}_cifar10_best.pth"
+        ds_str = dataset_name.lower() if dataset_name else "cifar10"
+        checkpoint_path = f"{name_clean}_{ds_str}_best.pth"
 
     resolved_ckpt = find_existing_checkpoint(checkpoint_path)
 
@@ -166,7 +177,7 @@ def get_model(
                 f"Benchmark execution aborted to prevent uninitialized/random model evaluations (P0.2)."
             )
     else:
-        checkpoint = torch.load(resolved_ckpt, map_location=device)
+        checkpoint = torch.load(resolved_ckpt, map_location=device, weights_only=False)
         state_dict = checkpoint["model_state_dict"] if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint else checkpoint
         model.load_state_dict(state_dict)
         model.checkpoint_path = resolved_ckpt

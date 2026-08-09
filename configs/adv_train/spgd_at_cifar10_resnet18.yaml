@@ -1,0 +1,45 @@
+experiment:
+  name: cifar10_resnet18_spgd_at
+  seed: 42
+
+dataset:
+  name: cifar10
+  num_workers: 4
+
+model:
+  name: resnet18
+
+training:
+  epochs: 200
+  train_batch_size: 128
+  eval_batch_size: 256
+  amp: false
+  grad_accum_steps: 1
+
+optimizer:
+  name: sgd
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  nesterov: false
+
+scheduler:
+  name: cosine
+  min_lr: 0.0
+
+adversarial_training:
+  enabled: true
+  attack: spgd
+  clean_weight: 0.5
+  adversarial_weight: 0.5
+  attack_kwargs:
+    k: 16
+    step_size: 0.2
+    steps: 10
+
+checkpoint:
+  directory: result/checkpoints
+  monitor: val_accuracy
+  mode: max
+  save_last: true
+  save_best: true

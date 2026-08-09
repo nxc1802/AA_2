@@ -1,0 +1,35 @@
+experiment:
+  name: cifar10_resnet18_clean
+  seed: 42
+
+dataset:
+  name: cifar10
+  num_workers: 4
+
+model:
+  name: resnet18
+
+training:
+  epochs: 200
+  train_batch_size: 256
+  eval_batch_size: 512
+  amp: false
+  grad_accum_steps: 1
+
+optimizer:
+  name: sgd
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  nesterov: false
+
+scheduler:
+  name: cosine
+  min_lr: 0.0
+
+checkpoint:
+  directory: result/checkpoints
+  monitor: val_accuracy
+  mode: max
+  save_last: true
+  save_best: true

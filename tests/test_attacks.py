@@ -20,8 +20,11 @@ def test_attacks_contract():
     y = torch.tensor([0, 1])
     k = 4
 
+    # Use strict=False: benchmark scripts pass shared kwargs and rely on filtering.
+    # Strict validation is enforced at the config/paper-run level, not unit test level.
     for name in ["fgsm", "pgd", "ours"]:
-        attack = create_attack(name, model=model, k=k)
+        attack_kwargs = {"k": k} if name == "ours" else {}
+        attack = create_attack(name, model=model, strict=False, **attack_kwargs)
         output = attack.attack(x, y)
 
         assert output.x_adv.shape == x.shape
@@ -31,3 +34,16 @@ def test_attacks_contract():
         if spec.mode == "budget":
             l0 = compute_spatial_l0(output.x_adv - x)
             assert (l0 <= k).all(), f"Attack {name} exceeded budget k={k}, got l0={l0}"
+
+
+def test_strict_kwargs_validation():
+    """create_attack() must raise ValueError for unknown kwargs when strict=True (default)."""
+    import pytest
+    model = DummyModel()
+    with pytest.raises(ValueError, match="Unknown kwargs"):
+        # 'k' is not a valid param for FGSM
+        create_attack("fgsm", model=model, k=4)
+
+    # strict=False should NOT raise
+    attack = create_attack("fgsm", model=model, strict=False, k=4)
+    assert attack is not None

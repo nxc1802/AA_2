@@ -9,21 +9,29 @@ from aa.utils import prepare_model_for_eval
 
 
 def gaussian_blur(x: torch.Tensor, kernel_size: int = 3, sigma: float = 1.0) -> torch.Tensor:
-    """Applies Gaussian Blur preprocessing to tensor x (B, C, H, W)."""
+    """Applies Gaussian Blur preprocessing to tensor x (B, C, H, W).
+    Uses reflect padding to avoid artificial dark border artifacts on image edges.
+    """
     channels = x.size(1)
     radius = kernel_size // 2
     kernel_1d = torch.exp(-torch.arange(-radius, radius + 1, device=x.device).float()**2 / (2 * sigma**2))
     kernel_1d = kernel_1d / kernel_1d.sum()
     kernel_2d = kernel_1d.unsqueeze(1) * kernel_1d.unsqueeze(0)
     kernel_4d = kernel_2d.expand(channels, 1, kernel_size, kernel_size)
-    return F.conv2d(x, kernel_4d, padding=radius, groups=channels)
+    # Reflect-pad before conv to avoid zero-padding border artifacts
+    x_padded = F.pad(x, (radius, radius, radius, radius), mode="reflect")
+    return F.conv2d(x_padded, kernel_4d, padding=0, groups=channels)
 
 
 def median_filter(x: torch.Tensor, kernel_size: int = 3) -> torch.Tensor:
-    """Applies Median Filter preprocessing to tensor x (B, C, H, W)."""
+    """Applies Median Filter preprocessing to tensor x (B, C, H, W).
+    Uses reflect padding to avoid artificial dark border artifacts on image edges.
+    """
     padding = kernel_size // 2
-    unfolded = F.unfold(x, kernel_size=kernel_size, padding=padding)
+    # Reflect-pad to avoid zero-padding border artifacts
+    x_padded = F.pad(x, (padding, padding, padding, padding), mode="reflect")
     B, C, H, W = x.shape
+    unfolded = F.unfold(x_padded, kernel_size=kernel_size, padding=0)
     unfolded = unfolded.view(B, C, kernel_size * kernel_size, H * W)
     filtered = unfolded.median(dim=2).values
     return filtered.view(B, C, H, W)

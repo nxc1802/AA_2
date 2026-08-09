@@ -59,12 +59,20 @@ class FeatureExtractorAdapter:
 class SparseFeatureAttack(Attack):
     """
     Proposed Method: Feature-Guided Collaborative Sparse Adversarial Attack with Support Pruning.
-    
+
     Ablation & Method Flags:
     - feature_guidance: Add normalized intermediate representation disruption loss.
+    - feature_loss_mode: "relative" (default) normalizes by ||phi(x)||^2 for cross-arch stability;
+                         "absolute" normalizes by feature_dim (old behavior).
+    - loss_fn: "ce" (default) uses cross-entropy; "margin" uses max_{j!=y} z_j - z_y
+               (avoids CE saturation, often stronger for sparse attacks).
     - interaction: Enable spatial pixel interaction scoring (CPA / FCSA / HSA / smoothing).
-    - interaction_mode: "cpa" (directional alignment), "fcsa" (functional synergy), "hsa" (hypergraph centrality), "smoothing".
+    - interaction_mode: "cpa" (directional alignment), "fcsa" (functional synergy),
+                        "hsa" (hypergraph centrality), "smoothing".
     - pruning: Perform iterative post-success support pruning to minimal L0.
+    - continue_after_success: If True, do not freeze samples after first success; continue
+                              optimizing to explore supports with smaller L0. Default False
+                              (backward-compatible, success-first mode).
     """
     def __init__(
         self,
@@ -74,11 +82,14 @@ class SparseFeatureAttack(Attack):
         alpha: float = 4 / 255.0,
         feature_weight: float = 1.0,
         feature_guidance: bool = True,
+        feature_loss_mode: str = "relative",
+        loss_fn: str = "ce",
         interaction: bool = True,
         interaction_mode: str = "cpa",
         coop_weight: float = 0.5,
         pruning: bool = True,
         pruning_max_passes: int = 5,
+        continue_after_success: bool = False,
         layer_name: Optional[str] = None,
     ):
         self.model = model
@@ -87,11 +98,14 @@ class SparseFeatureAttack(Attack):
         self.alpha = alpha
         self.feature_weight = feature_weight
         self.feature_guidance = feature_guidance
+        self.feature_loss_mode = feature_loss_mode.lower()
+        self.loss_fn = loss_fn.lower()
         self.interaction = interaction
         self.interaction_mode = interaction_mode.lower()
         self.coop_weight = coop_weight
         self.pruning = pruning
         self.pruning_max_passes = pruning_max_passes
+        self.continue_after_success = continue_after_success
         self.layer_name = layer_name
         self.ce_loss = nn.CrossEntropyLoss(reduction="none")
 
@@ -198,14 +212,31 @@ class SparseFeatureAttack(Attack):
 
             ce_l = self.ce_loss(outputs, y)
 
+            # Loss function: CE (default) or Margin (max_{j!=y} z_j - z_y)
+            if self.loss_fn == "margin":
+                # Margin loss: stronger gradient signal, avoids CE saturation
+                with torch.no_grad():
+                    y_one_hot = torch.zeros_like(outputs)
+                    y_one_hot.scatter_(1, y.unsqueeze(1), 1.0)
+                logit_y = (outputs * y_one_hot).sum(dim=1)
+                logit_max_other = (outputs - 1e9 * y_one_hot).max(dim=1).values
+                attack_loss = logit_max_other - logit_y
+            else:
+                attack_loss = ce_l
+
             if self.feature_guidance and feature_adapter.extracted_features is not None and clean_features is not None:
                 feat_diff = feature_adapter.extracted_features - clean_features
-                # Normalized Feature Loss by feature dimension d
-                feat_dim = clean_features.flatten(1).size(1)
-                feat_l = feat_diff.pow(2).flatten(1).sum(dim=1) / max(1.0, float(feat_dim))
-                total_loss = ce_l + self.feature_weight * feat_l
+                if self.feature_loss_mode == "relative":
+                    # Relative normalization: scale-invariant across layers/architectures
+                    clean_norm_sq = clean_features.pow(2).flatten(1).sum(dim=1) + 1e-8
+                    feat_l = feat_diff.pow(2).flatten(1).sum(dim=1) / clean_norm_sq
+                else:
+                    # Absolute normalization: normalize by feature dimension (legacy)
+                    feat_dim = clean_features.flatten(1).size(1)
+                    feat_l = feat_diff.pow(2).flatten(1).sum(dim=1) / max(1.0, float(feat_dim))
+                total_loss = attack_loss + self.feature_weight * feat_l
             else:
-                total_loss = ce_l
+                total_loss = attack_loss
 
             loss = total_loss.sum()
             self.model.zero_grad()
@@ -216,13 +247,20 @@ class SparseFeatureAttack(Attack):
             score = self._compute_spatial_interaction(grad)
 
             score_masked = score.clone()
-            score_masked[fooled_mask] = -float("inf")
+            # In continue_after_success mode we never mask out already-fooled samples,
+            # allowing the optimization to keep exploring smaller-support solutions.
+            if not self.continue_after_success:
+                score_masked[fooled_mask] = -float("inf")
 
             support_mask = exact_spatial_topk_mask(score_masked, self.k).float()
-            candidate_delta = delta + self.alpha * grad.sign() * support_mask * (~fooled_mask).view(B, 1, 1, 1).float()
+            active_update = (~fooled_mask) if not self.continue_after_success else torch.ones(B, dtype=torch.bool, device=device)
+            candidate_delta = delta + self.alpha * grad.sign() * support_mask * active_update.view(B, 1, 1, 1).float()
 
             delta_proj = project_l0(candidate_delta, self.k)
-            delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
+            if not self.continue_after_success:
+                delta = torch.where(fooled_mask.view(B, 1, 1, 1), delta, delta_proj)
+            else:
+                delta = delta_proj
             adv_x_proj = torch.clamp(orig_x + delta, 0.0, 1.0)
 
             with torch.no_grad():

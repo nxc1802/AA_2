@@ -53,11 +53,11 @@ def evaluate_attack(
         x, y = x.to(device), y.to(device)
 
         output = attack.attack(x, y) if hasattr(attack, "attack") else attack(x, y)
-        total_forward += getattr(output, "forward_evals", counting_model.forward_calls)
+        total_forward += getattr(output, "forward_evals", 0)
         total_backward += getattr(output, "backward_evals", 0)
-        total_queries += getattr(output, "queries", counting_model.samples_evaluated)
+        total_queries += getattr(output, "queries", 0)
 
-        batch_m: BatchMetrics = evaluate_batch(model, x, y, output, lpips_fn=lpips_fn)
+        batch_m: BatchMetrics = evaluate_batch(counting_model, x, y, output, lpips_fn=lpips_fn)
 
         all_clean_correct.append(batch_m.clean_correct.cpu())
         all_adv_correct.append(batch_m.adv_correct.cpu())

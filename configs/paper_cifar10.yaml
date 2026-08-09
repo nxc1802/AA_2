@@ -1,0 +1,114 @@
+# paper_cifar10.yaml — Main paper benchmark config
+# Use for: paper results, final tables
+# samples: 1000 for intermediate validation, 10000 for final paper.
+# All attacks run with official/recommended settings.
+
+seed: 42
+
+dataset:
+  name: cifar10
+  samples: 1000  # Use 10000 for final paper tables
+  batch_size: 64
+
+model:
+  name: resnet18
+  checkpoint: resnet18_cifar10_best.pth
+  # TODO: add sha256 and expected_clean_acc once checkpoint is pinned
+  # sha256: <hex>
+  # expected_clean_acc: 93.5
+
+benchmark:
+  k_values: [1, 2, 4, 8, 16, 32, 64]
+
+defense_attacks:
+  - pgd0
+  - sparse_rs
+  - ours
+
+defense_k: 16
+
+# Dense references run separately from sparse attacks.
+# Do NOT rank dense vs sparse in the same table.
+dense_references:
+  - fgsm
+  - bim
+  - pgd
+
+# Sparse budgeted attacks — compared at matched K.
+sparse_budgeted:
+  - cornersearch
+  - pgd0
+  - spgd
+  - sparse_rs
+
+# Minimal-support attacks — run once, derive ASR@K from achieved L0.
+minimal_support:
+  - sparsefool
+  - sigma_zero
+  - gse
+
+# Proposed method
+proposed:
+  - ours
+
+# Flat list for backward-compat scripts that iterate attacks:
+attacks:
+  - fgsm
+  - bim
+  - pgd
+  - cornersearch
+  - pgd0
+  - spgd
+  - sparse_rs
+  - sparsefool
+  - sigma_zero
+  - gse
+  - ours
+
+attacks_kwargs:
+  pgd:
+    eps: 0.031372549  # 8/255
+    alpha: 0.007843137  # 2/255
+    steps: 20
+    random_start: true
+
+  fgsm:
+    eps: 0.031372549  # 8/255
+
+  bim:
+    eps: 0.031372549  # 8/255
+    alpha: 0.007843137  # 2/255
+    steps: 10
+
+  cornersearch:
+    max_k: 64
+
+  pgd0:
+    steps: 100
+
+  spgd:
+    steps: 100
+
+  sparse_rs:
+    n_queries: 10000
+
+  sparsefool:
+    max_iter: 20
+
+  sigma_zero:
+    steps: 500
+
+  gse:
+    max_evals: 1000
+
+  ours:
+    steps: 25
+    alpha: 0.015686274  # 4/255
+    feature_weight: 1.0
+    feature_guidance: true
+    feature_loss_mode: relative  # relative normalization (new)
+    interaction: true
+    interaction_mode: cpa
+    loss_fn: ce  # options: ce | margin
+    pruning: true
+    pruning_max_passes: 5

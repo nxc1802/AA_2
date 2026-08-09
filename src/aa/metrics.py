@@ -166,7 +166,11 @@ def compute_distortion_metrics(
     lpips_per: Optional[torch.Tensor],
     success_mask: torch.Tensor
 ) -> Dict[str, Any]:
-    """Aggregates distortion metrics over all samples and successful samples."""
+    """Aggregates distortion metrics over all samples and successful samples.
+
+    Reports mean, std, median, Q1 (25th percentile), Q3 (75th percentile) for L0
+    on successful samples, providing richer summary statistics for paper tables.
+    """
     total_count = l0_per.numel()
     succ_count = success_mask.sum().item()
 
@@ -186,19 +190,22 @@ def compute_distortion_metrics(
         succ_ssim = ssim_per[success_mask].float()
 
         metrics["succ_l0_mean"] = succ_l0.mean().item()
+        metrics["succ_l0_std"] = succ_l0.std().item() if succ_l0.numel() > 1 else 0.0
         metrics["succ_l0_median"] = succ_l0.median().item()
+        metrics["succ_l0_q25"] = succ_l0.quantile(0.25).item()
+        metrics["succ_l0_q75"] = succ_l0.quantile(0.75).item()
         metrics["succ_l2_mean"] = succ_l2.mean().item()
         metrics["succ_linf_mean"] = succ_linf.mean().item()
         metrics["succ_psnr_mean"] = succ_psnr.mean().item()
         metrics["succ_ssim_mean"] = succ_ssim.mean().item()
         metrics["succ_lpips_mean"] = lpips_per[success_mask].mean().item() if lpips_per is not None else None
     else:
-        metrics["succ_l0_mean"] = None
-        metrics["succ_l0_median"] = None
-        metrics["succ_l2_mean"] = None
-        metrics["succ_linf_mean"] = None
-        metrics["succ_psnr_mean"] = None
-        metrics["succ_ssim_mean"] = None
-        metrics["succ_lpips_mean"] = None
+        for key in [
+            "succ_l0_mean", "succ_l0_std", "succ_l0_median",
+            "succ_l0_q25", "succ_l0_q75",
+            "succ_l2_mean", "succ_linf_mean",
+            "succ_psnr_mean", "succ_ssim_mean", "succ_lpips_mean",
+        ]:
+            metrics[key] = None
 
     return metrics

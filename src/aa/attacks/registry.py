@@ -44,12 +44,30 @@ def get_attack_spec(name: str) -> AttackSpec:
     return ATTACK_REGISTRY[key]
 
 
-def create_attack(name: str, model: nn.Module, **kwargs) -> Attack:
-    """Instantiates an attack by name from the registry, filtering unsupported kwargs."""
+def create_attack(name: str, model: nn.Module, strict: bool = True, **kwargs) -> Attack:
+    """Instantiates an attack by name from the registry.
+
+    Args:
+        name: Attack name (key in ATTACK_REGISTRY).
+        model: PyTorch model to attack.
+        strict: If True (default), raise ValueError for unknown kwargs instead of
+                silently dropping them. Set False only for exploratory/debug use.
+        **kwargs: Attack hyperparameters.
+
+    Raises:
+        ValueError: If ``strict=True`` and unknown kwargs are passed.
+    """
     spec = get_attack_spec(name)
 
     sig = inspect.signature(spec.factory.__init__)
     valid_params = set(sig.parameters.keys()) - {"self", "model"}
+
+    unknown = {k for k in kwargs if k not in valid_params}
+    if unknown and strict:
+        raise ValueError(
+            f"Unknown kwargs for attack '{name}': {unknown}. "
+            f"Valid parameters: {sorted(valid_params)}"
+        )
 
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
     return spec.factory(model=model, **filtered_kwargs)

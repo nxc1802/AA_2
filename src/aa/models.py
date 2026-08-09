@@ -96,15 +96,30 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
         return os.path.abspath(checkpoint_path_or_name)
 
     filename = os.path.basename(checkpoint_path_or_name)
-
     workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    local_root_p = os.path.join(workspace_root, filename)
-    if os.path.isfile(local_root_p):
-        return local_root_p
 
-    saved_p = os.path.join(workspace_root, "result", "saved_models", filename)
-    if os.path.isfile(saved_p):
-        return saved_p
+    candidates = [
+        os.path.join(workspace_root, "result", "saved_models", filename),
+        os.path.join(workspace_root, "result", "checkpoints", filename),
+        os.path.join(workspace_root, filename),
+    ]
+
+    # Subdirectories search in result/checkpoints/ (e.g. result/checkpoints/cifar10_resnet18_clean/best.pth)
+    ckpt_dir = os.path.join(workspace_root, "result", "checkpoints")
+    if os.path.isdir(ckpt_dir):
+        for sub in os.listdir(ckpt_dir):
+            sub_path = os.path.join(ckpt_dir, sub)
+            if os.path.isdir(sub_path):
+                target_pth = os.path.join(sub_path, filename)
+                if os.path.isfile(target_pth):
+                    candidates.append(target_pth)
+                target_best = os.path.join(sub_path, "best.pth")
+                if os.path.isfile(target_best) and any(kw in sub for kw in [filename.replace(".pth", ""), "clean", "resnet18"]):
+                    candidates.append(target_best)
+
+    for cand in candidates:
+        if os.path.isfile(cand):
+            return os.path.abspath(cand)
 
     # Download from Hugging Face
     try:

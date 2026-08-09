@@ -19,14 +19,14 @@ from aa.attacks.external.gse import GSE
 class AttackSpec:
     name: str
     factory: Callable[..., Attack]
-    mode: str  # "dense" | "budget" | "minimal"
+    mode: str  # "dense" | "budget" | "minimal" | "progressive"
 
 
 ATTACK_REGISTRY: Dict[str, AttackSpec] = {
     "fgsm": AttackSpec(name="FGSM", factory=FGSM, mode="dense"),
     "bim": AttackSpec(name="BIM", factory=BIM, mode="dense"),
     "pgd": AttackSpec(name="PGD", factory=PGD, mode="dense"),
-    "cornersearch": AttackSpec(name="CornerSearch", factory=CornerSearch, mode="budget"),
+    "cornersearch": AttackSpec(name="CornerSearch", factory=CornerSearch, mode="progressive"),
     "pgd0": AttackSpec(name="PGD0", factory=PGD0, mode="budget"),
     "spgd": AttackSpec(name="Sparse-PGD", factory=SparsePGD, mode="budget"),
     "sparse_rs": AttackSpec(name="Sparse-RS", factory=SparseRS, mode="budget"),

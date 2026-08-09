@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional, Dict, Any
 import torch
 
 
@@ -8,6 +9,7 @@ class AttackOutput:
     forward_evals: int = 0
     backward_evals: int = 0
     queries: int = 0
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class Attack:

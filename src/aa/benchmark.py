@@ -153,3 +153,7 @@ def derive_minimal_asr_curve(eval_res: Dict[str, Any], k_values: List[int]) -> D
 
     return derived_results
 
+
+derive_progressive_asr_curve = derive_minimal_asr_curve
+
+

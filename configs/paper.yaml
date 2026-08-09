@@ -48,7 +48,8 @@ attacks_kwargs:
     steps: 10
 
   cornersearch:
-    max_k: 64
+    max_iter: 1000
+    n_max: 100
 
   pgd0:
     steps: 100

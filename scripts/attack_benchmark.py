@@ -6,7 +6,7 @@ from aa.utils import set_seed, get_best_device, get_git_reproducibility_info
 from aa.data import get_sample_batch_indices
 from aa.models import get_model
 from aa.attacks import create_attack, get_attack_spec
-from aa.benchmark import evaluate_attack, derive_minimal_asr_curve
+from aa.benchmark import evaluate_attack, derive_minimal_asr_curve, derive_progressive_asr_curve
 
 
 def main():
@@ -82,6 +82,20 @@ def main():
                 print(f"    ⚠️ Failed running dense attack {atk_name}: {e}", flush=True)
                 all_results["results"][atk_name]["dense"] = {"error": str(e)}
 
+        elif mode == "progressive":
+            k_max = max(k_values)
+            print(f"--> Running PROGRESSIVE attack: {atk_name} (single pass at Kmax={k_max} & deriving curve)...", flush=True)
+            try:
+                attack = create_attack(atk_name, model=model, k=k_max, max_k=k_max, **atk_kwargs)
+                base_res = evaluate_attack(model, attack, loader, device=device)
+                derived_curve = derive_progressive_asr_curve(base_res, k_values)
+                all_results["results"][atk_name] = derived_curve
+                k_max_asr = derived_curve.get(f"k_{k_max}", {}).get("asr", 0.0)
+                print(f"    [PROGRESSIVE] ASR@{k_max}: {k_max_asr:.2f}%, Clean Acc: {base_res['clean_accuracy']:.2f}%, Runtime: {base_res['runtime_seconds']:.2f}s", flush=True)
+            except Exception as e:
+                print(f"    ⚠️ Failed running progressive attack {atk_name}: {e}", flush=True)
+                all_results["results"][atk_name]["error"] = str(e)
+
         elif mode == "minimal":
             print(f"--> Running MINIMAL support attack: {atk_name} (single pass & deriving ASR@K)...", flush=True)
             try:
@@ -106,7 +120,9 @@ def main():
                     print(f"    ⚠️ Failed running {atk_name} (K={k}): {e}", flush=True)
                     all_results["results"][atk_name][f"k_{k}"] = {"error": str(e)}
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(all_results, f, indent=2)
 

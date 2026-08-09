@@ -52,7 +52,8 @@ attacks_kwargs:
     steps: 10
 
   cornersearch:
-    max_k: 64
+    max_iter: 100
+    n_max: 50
 
   pgd0:
     steps: 20  # reduced for smoke

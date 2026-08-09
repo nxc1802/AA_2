@@ -158,8 +158,10 @@ Clean-incorrect samples are excluded from the ASR denominator but remain part of
 * BIM
 * PGD
 
+### Progressive sparse attacks
+* CornerSearch (`mode="progressive"`: evaluated in a single pass at $K_{\max}=64$; $ASR@K$ curves for $K \in \{1,2,4,8,16,32,64\}$ are derived from each sample's actual spatial $L_0$)
+
 ### Budgeted sparse attacks
-* CornerSearch
 * PGD0
 * Sparse-PGD
 * Sparse-RS

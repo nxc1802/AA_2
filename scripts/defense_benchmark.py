@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--config", type=str, default="configs/paper.yaml", help="Path to config YAML")
     parser.add_argument("--output", type=str, default="result/defense_benchmark_results.json", help="Path to output JSON")
     parser.add_argument("--eval-modes", nargs="+", default=["adaptive", "oblivious"], help="Evaluation modes")
+    parser.add_argument("--strict", action="store_true", help="Fail-fast if any attack execution fails (recommended for paper runs)")
     args = parser.parse_args()
 
     if not os.path.exists(args.config):
@@ -37,6 +38,7 @@ def main():
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
+    strict_mode = args.strict or cfg.get("strict", False)
     seed = cfg.get("seed", 42)
     set_seed(seed)
     device = get_best_device()
@@ -54,6 +56,7 @@ def main():
     base_model = get_model(
         model_name=model_cfg.get("name", "resnet18"),
         checkpoint_path=model_cfg.get("checkpoint", None),
+        expected_sha256=model_cfg.get("expected_sha256", None),
         device=device
     )
 
@@ -63,6 +66,7 @@ def main():
     all_results = {
         "metadata": {
             "config": cfg,
+            "strict_mode": strict_mode,
             "device": str(device),
             "sample_indices_hash": sample_hash,
             "model_checkpoint_sha256": getattr(base_model, "checkpoint_sha256", None),
@@ -71,7 +75,7 @@ def main():
         "defenses": {}
     }
 
-    print(f"=== Starting Defense Benchmark on {device} ({len(loader.dataset)} samples) ===")
+    print(f"=== Starting Defense Benchmark on {device} ({len(loader.dataset)} samples, strict={strict_mode}) ===")
 
     for def_name, defense_obj in DEFENSES_MAP.items():
         all_results["defenses"][def_name] = {}
@@ -89,9 +93,28 @@ def main():
                     print(f"    [{mode}] {atk_name} -> Defended Clean Acc: {res['clean_accuracy']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, ASR: {res['asr']:.2f}%")
                 except Exception as e:
                     print(f"    ⚠️ Failed {atk_name} on {def_name} [{mode}]: {e}")
+                    if strict_mode:
+                        raise RuntimeError(f"Attack '{atk_name}' failed on defense '{def_name}' [{mode}] in strict paper mode: {e}") from e
                     all_results["defenses"][def_name][mode][atk_name] = {"error": str(e)}
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    # Post-run assertion check for strict mode
+    failed_defenses = []
+    for def_k, def_v in all_results["defenses"].items():
+        for m_k, m_v in def_v.items():
+            for atk_k, atk_v in m_v.items():
+                if isinstance(atk_v, dict) and "error" in atk_v:
+                    failed_defenses.append(f"{def_k}/{m_k}/{atk_k}: {atk_v['error']}")
+
+    if failed_defenses:
+        err_msg = f"Defense benchmark finished with {len(failed_defenses)} failed execution(s): {failed_defenses}"
+        if strict_mode:
+            raise RuntimeError(f"STRICT DEFENSE BENCHMARK FAILED: {err_msg}")
+        else:
+            print(f"⚠️ WARNING: {err_msg}", flush=True)
+
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(all_results, f, indent=2)
 

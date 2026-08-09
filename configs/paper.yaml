@@ -1,4 +1,5 @@
 seed: 42
+strict: true  # Fail-fast paper validation: abort execution if any attack fails
 
 dataset:
   name: cifar10
@@ -8,6 +9,8 @@ dataset:
 model:
   name: resnet18
   checkpoint: resnet18_cifar10_best.pth
+  expected_sha256: 378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172
+  expected_clean_acc: 94.84
 
 benchmark:
   k_values: [1, 2, 4, 8, 16, 32, 64]

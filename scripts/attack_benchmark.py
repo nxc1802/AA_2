@@ -86,7 +86,8 @@ def main():
             k_max = max(k_values)
             print(f"--> Running PROGRESSIVE attack: {atk_name} (single pass at Kmax={k_max} & deriving curve)...", flush=True)
             try:
-                attack = create_attack(atk_name, model=model, k=k_max, max_k=k_max, **atk_kwargs)
+                clean_atk_kwargs = {k: v for k, v in atk_kwargs.items() if k not in ("k", "max_k")}
+                attack = create_attack(atk_name, model=model, k=k_max, **clean_atk_kwargs)
                 base_res = evaluate_attack(model, attack, loader, device=device)
                 derived_curve = derive_progressive_asr_curve(base_res, k_values)
                 all_results["results"][atk_name] = derived_curve
@@ -112,7 +113,8 @@ def main():
             print(f"--> Running BUDGET attack: {atk_name} (sweeping K={k_values})...", flush=True)
             for k in k_values:
                 try:
-                    attack = create_attack(atk_name, model=model, k=k, **atk_kwargs)
+                    clean_atk_kwargs = {key: val for key, val in atk_kwargs.items() if key not in ("k", "max_k")}
+                    attack = create_attack(atk_name, model=model, k=k, **clean_atk_kwargs)
                     res = evaluate_attack(model, attack, loader, device=device)
                     all_results["results"][atk_name][f"k_{k}"] = res
                     print(f"    (K={k}) ASR: {res['asr']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s", flush=True)

@@ -77,3 +77,16 @@ def test_cornersearch_reproducibility():
 
     assert torch.equal(out1.x_adv, out2.x_adv)
     assert out1.queries == out2.queries
+
+
+def test_create_attack_cornersearch_no_keyword_collision():
+    model = TinyModel()
+    model.eval()
+
+    # Test passing kwargs containing max_k and k
+    atk_kwargs = {"max_k": 64, "max_iter": 10, "n_max": 5}
+    clean_atk_kwargs = {k: v for k, v in atk_kwargs.items() if k not in ("k", "max_k")}
+    attack = create_attack("cornersearch", model=model, k=64, **clean_atk_kwargs)
+    assert isinstance(attack, CornerSearch)
+    assert attack.k == 64
+

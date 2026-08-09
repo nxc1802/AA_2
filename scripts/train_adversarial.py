@@ -135,7 +135,7 @@ def main():
     best_path = os.path.join(checkpoint_manager.experiment_dir, "best.pth")
     if os.path.isfile(best_path):
         print(f"Loading best checkpoint for test set evaluation: {best_path}")
-        best_ckpt = torch.load(best_path, map_location=device)
+        best_ckpt = torch.load(best_path, map_location=device, weights_only=False)
         model.load_state_dict(best_ckpt["model_state_dict"])
 
     test_metrics = trainer.evaluate(test_loader)

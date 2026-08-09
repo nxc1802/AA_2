@@ -30,7 +30,7 @@ def main():
     device = torch.device(args.device) if args.device else get_best_device()
     sha256 = compute_file_sha256(ckpt_path)
 
-    checkpoint_payload = torch.load(ckpt_path, map_location=device)
+    checkpoint_payload = torch.load(ckpt_path, map_location=device, weights_only=False)
 
     dataset_name = args.dataset or (
         checkpoint_payload.get("dataset") if isinstance(checkpoint_payload, dict) else "cifar10"

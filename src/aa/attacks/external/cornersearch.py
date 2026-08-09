@@ -8,9 +8,10 @@ THIRD_PARTY_SIA = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..
 
 
 class CornerSearch(Attack):
-    def __init__(self, model: nn.Module, k: int = 16, max_iter: int = 1000, n_max: int = 100):
+    def __init__(self, model: nn.Module, k: int = 16, max_k: int = 64, max_iter: int = 1000, n_max: int = 100):
         self.model = model
         self.k = k
+        self.max_k = max_k
         self.max_iter = max_iter
         self.n_max = n_max
 

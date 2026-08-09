@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+from typing import Optional
 from aa.attacks.base import Attack, AttackOutput
 from aa.attacks.external.scoped_path import scoped_sys_path
 
@@ -8,10 +9,10 @@ THIRD_PARTY_GSE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..
 
 
 class GSE(Attack):
-    def __init__(self, model: nn.Module, k: int = 16, steps: int = 50):
+    def __init__(self, model: nn.Module, k: int = 16, steps: int = 50, max_evals: Optional[int] = None):
         self.model = model
         self.k = k
-        self.steps = steps
+        self.steps = max_evals if max_evals is not None else steps
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> AttackOutput:
         device = x.device

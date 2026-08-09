@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+from typing import Optional
 from aa.attacks.base import Attack, AttackOutput
 from aa.attacks.external.scoped_path import scoped_sys_path
 
@@ -8,10 +9,10 @@ THIRD_PARTY_SPARSEFOOL = os.path.abspath(os.path.join(os.path.dirname(__file__),
 
 
 class SparseFool(Attack):
-    def __init__(self, model: nn.Module, k: int = 250, steps: int = 20, lambda_val: float = 3.0):
+    def __init__(self, model: nn.Module, k: int = 250, steps: int = 20, max_iter: Optional[int] = None, lambda_val: float = 3.0):
         self.model = model
         self.k = k
-        self.steps = steps
+        self.steps = max_iter if max_iter is not None else steps
         self.lambda_val = lambda_val
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> AttackOutput:

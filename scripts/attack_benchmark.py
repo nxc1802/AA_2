@@ -57,7 +57,7 @@ def main():
         "results": {}
     }
 
-    print(f"=== Starting Attack Benchmark on {device} ({len(loader.dataset)} samples) ===")
+    print(f"=== Starting Attack Benchmark on {device} ({len(loader.dataset)} samples) ===", flush=True)
 
     for atk_item in attack_names:
         if isinstance(atk_item, dict):
@@ -72,38 +72,38 @@ def main():
         all_results["results"][atk_name] = {}
 
         if mode == "dense":
-            print(f"--> Running DENSE attack: {atk_name} (single pass)...")
+            print(f"--> Running DENSE attack: {atk_name} (single pass)...", flush=True)
             try:
                 attack = create_attack(atk_name, model=model, **atk_kwargs)
                 res = evaluate_attack(model, attack, loader, device=device)
                 all_results["results"][atk_name]["dense"] = res
-                print(f"    [DENSE] ASR: {res['asr']:.2f}%, Clean Acc: {res['clean_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s")
+                print(f"    [DENSE] ASR: {res['asr']:.2f}%, Clean Acc: {res['clean_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s", flush=True)
             except Exception as e:
-                print(f"    ⚠️ Failed running dense attack {atk_name}: {e}")
+                print(f"    ⚠️ Failed running dense attack {atk_name}: {e}", flush=True)
                 all_results["results"][atk_name]["dense"] = {"error": str(e)}
 
         elif mode == "minimal":
-            print(f"--> Running MINIMAL support attack: {atk_name} (single pass & deriving ASR@K)...")
+            print(f"--> Running MINIMAL support attack: {atk_name} (single pass & deriving ASR@K)...", flush=True)
             try:
                 attack = create_attack(atk_name, model=model, **atk_kwargs)
                 base_res = evaluate_attack(model, attack, loader, device=device)
                 derived_curve = derive_minimal_asr_curve(base_res, k_values)
                 all_results["results"][atk_name] = derived_curve
-                print(f"    [MINIMAL] Median L0: {base_res['metrics']['succ_l0_median']}, Derived ASR@16: {derived_curve.get('k_16', {}).get('asr', 0.0):.2f}%")
+                print(f"    [MINIMAL] Median L0: {base_res['metrics']['succ_l0_median']}, Derived ASR@16: {derived_curve.get('k_16', {}).get('asr', 0.0):.2f}%", flush=True)
             except Exception as e:
-                print(f"    ⚠️ Failed running minimal attack {atk_name}: {e}")
+                print(f"    ⚠️ Failed running minimal attack {atk_name}: {e}", flush=True)
                 all_results["results"][atk_name]["error"] = str(e)
 
         else: # "budget"
-            print(f"--> Running BUDGET attack: {atk_name} (sweeping K={k_values})...")
+            print(f"--> Running BUDGET attack: {atk_name} (sweeping K={k_values})...", flush=True)
             for k in k_values:
                 try:
                     attack = create_attack(atk_name, model=model, k=k, **atk_kwargs)
                     res = evaluate_attack(model, attack, loader, device=device)
                     all_results["results"][atk_name][f"k_{k}"] = res
-                    print(f"    (K={k}) ASR: {res['asr']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s")
+                    print(f"    (K={k}) ASR: {res['asr']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s", flush=True)
                 except Exception as e:
-                    print(f"    ⚠️ Failed running {atk_name} (K={k}): {e}")
+                    print(f"    ⚠️ Failed running {atk_name} (K={k}): {e}", flush=True)
                     all_results["results"][atk_name][f"k_{k}"] = {"error": str(e)}
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)

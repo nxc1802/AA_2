@@ -78,7 +78,7 @@ def get_dataloaders(
     batch_size: Optional[int] = None,
     train_batch_size: int = 256,
     eval_batch_size: int = 512,
-    num_workers: int = 0,
+    num_workers: Optional[int] = None,
     seed: int = 42,
     hf_token: Optional[str] = HF_TOKEN,
     pin_memory: bool = True
@@ -91,6 +91,9 @@ def get_dataloaders(
     if batch_size is not None:
         train_batch_size = batch_size
         eval_batch_size = batch_size
+
+    if num_workers is None:
+        num_workers = min(os.cpu_count() or 2, 4)
 
     spec = get_dataset_spec(dataset_name)
     ds_name = dataset_name.lower()
@@ -113,17 +116,23 @@ def get_dataloaders(
     g = torch.Generator()
     g.manual_seed(seed)
 
+    persistent_workers = True if num_workers > 0 else False
+    prefetch_factor = 2 if num_workers > 0 else None
+
     train_loader = DataLoader(
         train_subset, batch_size=train_batch_size, shuffle=True,
-        num_workers=num_workers, worker_init_fn=seed_worker, generator=g, pin_memory=pin_memory
+        num_workers=num_workers, worker_init_fn=seed_worker, generator=g,
+        pin_memory=pin_memory, persistent_workers=persistent_workers, prefetch_factor=prefetch_factor
     )
     val_loader = DataLoader(
         val_subset, batch_size=eval_batch_size, shuffle=False,
-        num_workers=num_workers, worker_init_fn=seed_worker, pin_memory=pin_memory
+        num_workers=num_workers, worker_init_fn=seed_worker,
+        pin_memory=pin_memory, persistent_workers=persistent_workers, prefetch_factor=prefetch_factor
     )
     test_loader = DataLoader(
         pt_test, batch_size=eval_batch_size, shuffle=False,
-        num_workers=num_workers, worker_init_fn=seed_worker, pin_memory=pin_memory
+        num_workers=num_workers, worker_init_fn=seed_worker,
+        pin_memory=pin_memory, persistent_workers=persistent_workers, prefetch_factor=prefetch_factor
     )
 
     return train_loader, val_loader, test_loader

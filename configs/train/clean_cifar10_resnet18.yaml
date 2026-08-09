@@ -13,7 +13,7 @@ training:
   epochs: 200
   train_batch_size: 256
   eval_batch_size: 512
-  amp: false
+  amp: true
   grad_accum_steps: 1
 
 optimizer:

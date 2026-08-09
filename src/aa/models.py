@@ -132,7 +132,8 @@ def get_model(
     strict_checkpoint: bool = True,
     expected_sha256: Optional[str] = None,
     min_clean_acc: Optional[float] = None,
-    validation_loader = None
+    validation_loader = None,
+    eval_mode: bool = True
 ) -> nn.Module:
     """Instantiates neural network backbones and loads checkpoints strictly."""
     from aa.utils import compute_file_sha256
@@ -188,7 +189,13 @@ def get_model(
                 f"Checkpoint SHA256 mismatch for {resolved_ckpt}. Expected: {expected_sha256}, Actual: {model.checkpoint_sha256}"
             )
 
-    model = prepare_model_for_eval(model, device=device)
+    if eval_mode:
+        model = prepare_model_for_eval(model, device=device)
+    else:
+        model = model.to(device)
+        model.train()
+        for param in model.parameters():
+            param.requires_grad_(True)
 
     if min_clean_acc is not None and validation_loader is not None:
         acc = evaluate_accuracy(model, validation_loader, device=device)

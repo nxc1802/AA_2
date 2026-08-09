@@ -48,10 +48,16 @@ def set_seed(seed: int = 42) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
+
+
+def enable_gpu_optimizations() -> None:
+    """Enables high-performance CUDA & cuDNN settings for fast GPU execution."""
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        if hasattr(torch, "set_float32_matmul_precision"):
+            torch.set_float32_matmul_precision("high")
 
 
 def prepare_model_for_eval(model: nn.Module, device: torch.device = None) -> nn.Module:

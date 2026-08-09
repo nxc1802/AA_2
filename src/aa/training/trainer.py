@@ -25,12 +25,18 @@ class Trainer:
     ):
         self.device = device or get_best_device()
         self.model = model.to(self.device)
+        for param in self.model.parameters():
+            param.requires_grad_(True)
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.criterion = criterion or nn.CrossEntropyLoss()
         self.checkpoint_manager = checkpoint_manager
         self.amp = amp
         self.grad_accum_steps = max(1, grad_accum_steps)
+
+        from aa.utils import enable_gpu_optimizations
+        enable_gpu_optimizations()
+
         if hasattr(torch.amp, "GradScaler"):
             self.scaler = torch.amp.GradScaler("cuda", enabled=self.amp and torch.cuda.is_available())
         else:
@@ -47,10 +53,15 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for step, (images, labels) in enumerate(train_loader):
-            images, labels = images.to(self.device), labels.to(self.device)
+            images = images.to(self.device, non_blocking=True)
+            labels = labels.to(self.device, non_blocking=True)
 
             if self.amp and torch.cuda.is_available():
-                with torch.cuda.amp.autocast():
+                if hasattr(torch.amp, "autocast"):
+                    autocast_ctx = torch.amp.autocast("cuda")
+                else:
+                    autocast_ctx = torch.cuda.amp.autocast()
+                with autocast_ctx:
                     outputs = self.model(images)
                     loss = self.criterion(outputs, labels)
                     scaled_loss = loss / self.grad_accum_steps
@@ -99,7 +110,8 @@ class Trainer:
 
         with torch.no_grad():
             for images, labels in eval_loader:
-                images, labels = images.to(self.device), labels.to(self.device)
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
                 outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
 

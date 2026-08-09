@@ -66,6 +66,7 @@ def main():
         dataset_name=dataset_name,
         pretrained=model_cfg.get("pretrained", False),
         strict_checkpoint=False,
+        eval_mode=False,
         device=device
     )
 

@@ -132,7 +132,8 @@ class AdversarialTrainer(Trainer):
         self.optimizer.zero_grad()
 
         for step, (images, labels) in enumerate(train_loader):
-            images, labels = images.to(self.device), labels.to(self.device)
+            images = images.to(self.device, non_blocking=True)
+            labels = labels.to(self.device, non_blocking=True)
 
             # Generate adversarial examples (with model in eval mode internally)
             x_adv = self.attack_generator.generate(self.model, images, labels, self.criterion)

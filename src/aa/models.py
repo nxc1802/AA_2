@@ -127,9 +127,14 @@ def get_model(
     num_classes: int = 10,
     pretrained: bool = False,
     checkpoint_path: Optional[str] = None,
-    device: Optional[torch.device] = None
+    device: Optional[torch.device] = None,
+    strict_checkpoint: bool = True,
+    expected_sha256: Optional[str] = None,
+    min_clean_acc: Optional[float] = None,
+    validation_loader = None
 ) -> nn.Module:
-    """Instantiates neural network backbones."""
+    """Instantiates neural network backbones and loads checkpoints strictly."""
+    from aa.utils import compute_file_sha256
     if device is None:
         device = get_best_device()
 
@@ -154,12 +159,33 @@ def get_model(
 
     resolved_ckpt = find_existing_checkpoint(checkpoint_path)
 
-    if resolved_ckpt is not None and os.path.isfile(resolved_ckpt):
+    if resolved_ckpt is None or not os.path.isfile(resolved_ckpt):
+        if strict_checkpoint and not pretrained:
+            raise FileNotFoundError(
+                f"Model checkpoint for '{name_clean}' not found at '{checkpoint_path}' (resolved: {resolved_ckpt}). "
+                f"Benchmark execution aborted to prevent uninitialized/random model evaluations (P0.2)."
+            )
+    else:
         checkpoint = torch.load(resolved_ckpt, map_location=device)
         state_dict = checkpoint["model_state_dict"] if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint else checkpoint
         model.load_state_dict(state_dict)
+        model.checkpoint_path = resolved_ckpt
+        model.checkpoint_sha256 = compute_file_sha256(resolved_ckpt)
+
+        if expected_sha256 and model.checkpoint_sha256 != expected_sha256:
+            raise ValueError(
+                f"Checkpoint SHA256 mismatch for {resolved_ckpt}. Expected: {expected_sha256}, Actual: {model.checkpoint_sha256}"
+            )
 
     model = prepare_model_for_eval(model, device=device)
+
+    if min_clean_acc is not None and validation_loader is not None:
+        acc = evaluate_accuracy(model, validation_loader, device=device)
+        if acc < min_clean_acc:
+            raise RuntimeError(
+                f"Model clean accuracy ({acc:.2f}%) is below minimum required threshold ({min_clean_acc:.2f}%). Aborting."
+            )
+
     return model
 
 

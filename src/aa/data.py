@@ -79,14 +79,55 @@ def get_dataloaders(
     return train_loader, val_loader, test_loader
 
 
+def get_sample_batch_indices(
+    dataset_name: str = "cifar10",
+    batch_size: int = 256,
+    num_samples: int = 1000,
+    seed: int = 42,
+    hf_token: Optional[str] = HF_TOKEN
+) -> Tuple[DataLoader, list, str]:
+    """Loads deterministic, class-stratified subset from Hugging Face test set for benchmark evaluation."""
+    import hashlib
+    ds_name = dataset_name.lower()
+    hf_test = load_dataset(HF_REPO_ID, name=ds_name, split="test", token=hf_token)
+    total_test = len(hf_test)
+
+    if num_samples >= total_test:
+        selected_indices = list(range(total_test))
+    else:
+        all_indices = list(range(total_test))
+        all_labels = hf_test["label"]
+        _, selected_indices = train_test_split(
+            all_indices,
+            test_size=num_samples,
+            random_state=seed,
+            stratify=all_labels
+        )
+        selected_indices = sorted(selected_indices)
+
+    pt_dataset = HFDatasetWrapper(hf_test, transform=get_dataset_transforms(is_train=False))
+    subset = Subset(pt_dataset, selected_indices)
+    loader = DataLoader(subset, batch_size=batch_size, shuffle=False, num_workers=0)
+
+    indices_str = ",".join(map(str, selected_indices))
+    indices_hash = hashlib.sha256(indices_str.encode("utf-8")).hexdigest()
+    return loader, selected_indices, indices_hash
+
+
 def get_sample_batch(
     dataset_name: str = "cifar10",
     batch_size: int = 256,
     num_samples: int = 1000,
+    seed: int = 42,
     hf_token: Optional[str] = HF_TOKEN
 ) -> DataLoader:
-    """Loads deterministic subset from Hugging Face test set for benchmark evaluation."""
-    ds_name = dataset_name.lower()
-    hf_ds = load_dataset(HF_REPO_ID, name=ds_name, split=f"test[:{num_samples}]", token=hf_token)
-    pt_dataset = HFDatasetWrapper(hf_ds, transform=get_dataset_transforms(is_train=False))
-    return DataLoader(pt_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    """Loads deterministic class-stratified subset from Hugging Face test set for benchmark evaluation."""
+    loader, _, _ = get_sample_batch_indices(
+        dataset_name=dataset_name,
+        batch_size=batch_size,
+        num_samples=num_samples,
+        seed=seed,
+        hf_token=hf_token
+    )
+    return loader
+

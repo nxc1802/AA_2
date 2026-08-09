@@ -12,6 +12,13 @@ model:
 benchmark:
   k_values: [1, 2, 4, 8, 16, 32, 64]
 
+defense_attacks:
+  - pgd0
+  - sparse_rs
+  - ours
+
+defense_k: 16
+
 attacks:
   - pgd
   - cornersearch
@@ -22,3 +29,49 @@ attacks:
   - sigma_zero
   - gse
   - ours
+
+attacks_kwargs:
+  pgd:
+    eps: 0.031372549 # 8/255
+    alpha: 0.007843137 # 2/255
+    steps: 20
+    random_start: true
+
+  fgsm:
+    eps: 0.031372549 # 8/255
+
+  bim:
+    eps: 0.031372549 # 8/255
+    alpha: 0.007843137 # 2/255
+    steps: 10
+
+  cornersearch:
+    max_k: 64
+
+  pgd0:
+    steps: 100
+
+  spgd:
+    steps: 100
+
+  sparse_rs:
+    n_queries: 10000
+
+  sparsefool:
+    max_iter: 20
+
+  sigma_zero:
+    steps: 500
+
+  gse:
+    max_evals: 1000
+
+  ours:
+    steps: 25
+    alpha: 0.015686274 # 4/255
+    feature_weight: 1.0
+    feature_guidance: true
+    interaction: true
+    interaction_mode: cpa
+    pruning: true
+    pruning_max_passes: 5

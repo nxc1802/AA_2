@@ -38,10 +38,10 @@ This repository provides a minimal, reproducible research benchmark suite for pi
 
 ## Documentation
 
-- [Experimental Protocol](file:///Volumes/WorkSpace/Project/B%E1%BA%A3n%20sao%20AA/docs/protocol.md)
-- [Proposed Method](file:///Volumes/WorkSpace/Project/B%E1%BA%A3n%20sao%20AA/docs/proposed_method.md)
-- [Development Roadmap](file:///Volumes/WorkSpace/Project/B%E1%BA%A3n%20sao%20AA/docs/roadmap.md)
-- [Third-Party Sources](file:///Volumes/WorkSpace/Project/B%E1%BA%A3n%20sao%20AA/THIRD_PARTY.md)
+- [Experimental Protocol](docs/protocol.md)
+- [Proposed Method](docs/proposed_method.md)
+- [Development Roadmap](docs/roadmap.md)
+- [Third-Party Sources](THIRD_PARTY.md)
 
 ## Quick Start
 

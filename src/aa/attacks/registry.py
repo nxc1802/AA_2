@@ -37,15 +37,20 @@ ATTACK_REGISTRY: Dict[str, AttackSpec] = {
 }
 
 
-def create_attack(name: str, model: nn.Module, **kwargs) -> Attack:
-    """Instantiates an attack by name from the registry, filtering unsupported kwargs."""
+def get_attack_spec(name: str) -> AttackSpec:
     key = name.lower()
     if key not in ATTACK_REGISTRY:
         raise ValueError(f"Attack '{name}' not found in registry. Options: {list(ATTACK_REGISTRY.keys())}")
-    spec = ATTACK_REGISTRY[key]
+    return ATTACK_REGISTRY[key]
+
+
+def create_attack(name: str, model: nn.Module, **kwargs) -> Attack:
+    """Instantiates an attack by name from the registry, filtering unsupported kwargs."""
+    spec = get_attack_spec(name)
 
     sig = inspect.signature(spec.factory.__init__)
     valid_params = set(sig.parameters.keys()) - {"self", "model"}
 
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
     return spec.factory(model=model, **filtered_kwargs)
+

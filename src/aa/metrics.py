@@ -112,16 +112,27 @@ def compute_per_sample_lpips(orig: torch.Tensor, adv: torch.Tensor, lpips_fn: Op
         return dist.view(-1)
 
 
-def evaluate_batch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, output) -> BatchMetrics:
+def evaluate_batch(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    output,
+    lpips_fn: Optional[Any] = None
+) -> BatchMetrics:
     """Evaluates metrics on a batch of adversarial examples given model, x, y, output."""
     x_adv = output.x_adv
     delta = x_adv - x
 
     with torch.no_grad():
-        clean_pred = model(x).argmax(dim=1)
-        adv_pred = model(x_adv).argmax(dim=1)
+        if hasattr(model, "evaluate_defended"):
+            clean_pred = model.evaluate_defended(x).argmax(dim=1)
+            adv_pred = model.evaluate_defended(x_adv).argmax(dim=1)
+        else:
+            clean_pred = model(x).argmax(dim=1)
+            adv_pred = model(x_adv).argmax(dim=1)
 
     clean_correct = clean_pred.eq(y)
+    adv_correct = adv_pred.eq(y)
     success = clean_correct & adv_pred.ne(y)
 
     l0 = compute_spatial_l0(delta)
@@ -129,15 +140,18 @@ def evaluate_batch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, out
     linf = delta.flatten(1).abs().max(dim=1).values
     psnr = compute_per_sample_psnr(x, x_adv)
     ssim = compute_per_sample_ssim(x, x_adv)
+    lpips = compute_per_sample_lpips(x, x_adv, lpips_fn=lpips_fn)
 
     return BatchMetrics(
         clean_correct=clean_correct,
+        adv_correct=adv_correct,
         success=success,
         l0=l0,
         l2=l2,
         linf=linf,
         psnr=psnr,
         ssim=ssim,
+        lpips=lpips
     )
 
 

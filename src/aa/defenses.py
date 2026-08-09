@@ -46,13 +46,13 @@ def jpeg_compression(x: torch.Tensor, quality: int = 75) -> torch.Tensor:
 
 
 def total_variation_minimization(x: torch.Tensor, iters: int = 5, step_size: float = 0.05) -> torch.Tensor:
-    """Applies Total Variation Minimization smoothing to tensor x."""
+    """Applies Total Variation (TV) Minimization denoising to tensor x (B, C, H, W)."""
     x_def = x.clone().detach()
     for _ in range(iters):
-        diff_h = torch.abs(x_def[:, :, 1:, :] - x_def[:, :, :-1, :])
-        diff_w = torch.abs(x_def[:, :, :, 1:] - x_def[:, :, :, :-1])
-        grad_h = F.pad(diff_h, (0, 0, 1, 0)) - F.pad(diff_h, (0, 0, 0, 1))
-        grad_w = F.pad(diff_w, (1, 0, 0, 0)) - F.pad(diff_w, (0, 1, 0, 0))
+        diff_h = x_def[:, :, 1:, :] - x_def[:, :, :-1, :]
+        diff_w = x_def[:, :, :, 1:] - x_def[:, :, :, :-1]
+        grad_h = F.pad(diff_h.sign(), (0, 0, 1, 0)) - F.pad(diff_h.sign(), (0, 0, 0, 1))
+        grad_w = F.pad(diff_w.sign(), (1, 0, 0, 0)) - F.pad(diff_w.sign(), (0, 1, 0, 0))
         x_def = torch.clamp(x_def - step_size * (grad_h + grad_w), 0.0, 1.0)
     return x_def
 
@@ -132,3 +132,11 @@ class DefendedModelAdapter(nn.Module):
             return self.model(defended_x)
         else:
             return self.model(x)
+
+    def evaluate_defended(self, x: torch.Tensor) -> torch.Tensor:
+        """Evaluates model prediction on defended input (used for evaluating oblivious attacks)."""
+        if self.defense is None:
+            return self.model(x)
+        defended_x = self.defense.defend(x)
+        return self.model(defended_x)
+

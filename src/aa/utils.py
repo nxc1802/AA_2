@@ -65,6 +65,30 @@ def prepare_model_for_eval(model: nn.Module, device: torch.device = None) -> nn.
     return model
 
 
+class CountingModel(nn.Module):
+    """Wraps PyTorch nn.Module to track exact forward calls and samples evaluated."""
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.model = model
+        self.forward_calls = 0
+        self.samples_evaluated = 0
+
+    def reset_counters(self):
+        self.forward_calls = 0
+        self.samples_evaluated = 0
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.forward_calls += 1
+        self.samples_evaluated += x.size(0)
+        return self.model(x)
+
+    def __getattr__(self, name: str):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.model, name)
+
+
 def compute_file_sha256(filepath: str) -> str:
     """Computes SHA256 checksum of a file."""
     h = hashlib.sha256()
@@ -75,7 +99,10 @@ def compute_file_sha256(filepath: str) -> str:
 
 
 def get_git_reproducibility_info(repo_dir: str = None) -> dict:
-    """Returns current Git commit hash and dirty status."""
+    """Returns current Git commit hash, dirty status, and environment provenance."""
+    import sys
+    import platform
+
     if repo_dir is None:
         repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -95,5 +122,10 @@ def get_git_reproducibility_info(repo_dir: str = None) -> dict:
 
     return {
         "git_commit": commit_sha,
-        "git_dirty": is_dirty
+        "git_dirty": is_dirty,
+        "python_version": sys.version.split()[0],
+        "pytorch_version": torch.__version__,
+        "platform": platform.platform(),
+        "device_name": get_device_name()
     }
+

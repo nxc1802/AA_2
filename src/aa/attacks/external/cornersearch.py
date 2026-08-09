@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+import io
 import os
 from typing import Optional, Dict, Any
 import numpy as np
@@ -17,7 +19,8 @@ class CornerSearch(Attack):
         max_k: Optional[int] = None,
         max_iter: int = 1000,
         n_max: int = 100,
-        seed: Optional[int] = 42
+        seed: Optional[int] = 42,
+        verbose: bool = False
     ):
         self.model = model
         self.k = max_k if max_k is not None else k
@@ -25,6 +28,7 @@ class CornerSearch(Attack):
         self.max_iter = max_iter
         self.n_max = n_max
         self.seed = seed
+        self.verbose = verbose
 
     def attack(self, x: torch.Tensor, y: torch.Tensor) -> AttackOutput:
         device = x.device
@@ -59,7 +63,12 @@ class CornerSearch(Attack):
                 x_np = x.detach().cpu().permute(0, 2, 3, 1).numpy()
                 y_np = y.detach().cpu().numpy()
 
-                adv_np, pixels_changed, queries, upstream_success = official_attacker.perturb(x_np, y_np)
+                if not self.verbose:
+                    with redirect_stdout(io.StringIO()):
+                        adv_np, pixels_changed, queries, upstream_success = official_attacker.perturb(x_np, y_np)
+                else:
+                    adv_np, pixels_changed, queries, upstream_success = official_attacker.perturb(x_np, y_np)
+
                 total_queries = int(sum(queries)) if hasattr(queries, "__len__") else int(queries)
                 adv_tensor = torch.from_numpy(adv_np).permute(0, 3, 1, 2).to(device).float()
         finally:

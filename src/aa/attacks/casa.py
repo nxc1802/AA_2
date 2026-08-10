@@ -327,6 +327,10 @@ class CoalitionSparseAttack(Attack):
         # Stage 8: Drop-and-Repair Support Minimization (for successful samples)
         # -------------------------------------------------------------
         final_delta = best_delta.clone()
+        # -------------------------------------------------------------
+        # Stage 8: Batched Drop-and-Repair Support Minimization
+        # -------------------------------------------------------------
+        final_delta = best_delta.clone()
         final_support = best_support_mask.clone()
 
         if self.drop_and_repair:
@@ -336,74 +340,72 @@ class CoalitionSparseAttack(Attack):
                 forward_evals += 1
                 succ = (logits_final.argmax(dim=1) != y)
 
-            for b in range(B):
-                if not succ[b]:
-                    continue
+            active_counts = final_support.view(B, HW).sum(dim=1)
+            b_idx = torch.arange(B, device=device)
 
-                curr_supp = final_support[b:b+1].clone()
-                curr_d = final_delta[b:b+1].clone()
-                active_idx = curr_supp.view(1, HW).nonzero(as_tuple=False)[:, 1]
+            # Batched drop-and-repair iterations (up to K passes)
+            for pass_idx in range(self.k):
+                active_mask = (active_counts > 1) & succ
+                if not active_mask.any():
+                    break
 
-                # Iteratively try dropping active pixels
-                changed = True
-                while len(active_idx) > 1 and changed:
-                    changed = False
-                    # Compute removal costs for active pixels of sample b
-                    with torch.enable_grad():
-                        x_single = (orig_x[b:b+1] + curr_d).detach().requires_grad_(True)
-                        l_single = self._compute_loss(self.model(x_single), y[b:b+1])
+                # Compute removal cost redundancy across the batch in a single pass
+                with torch.enable_grad():
+                    x_curr = (orig_x + final_delta).detach().requires_grad_(True)
+                    loss_single = self._compute_loss(self.model(x_curr), y).sum()
+                    forward_evals += 1
+                    backward_evals += 1
+                    loss_single.backward()
+                    g_curr = x_curr.grad if x_curr.grad is not None else torch.zeros_like(x_curr)
+
+                redundancy = (g_curr * final_delta).sum(dim=1, keepdim=True)  # (B, 1, H, W)
+                red_flat = redundancy.view(B, HW).clone()
+                red_flat[~final_support.view(B, HW)] = float("inf")
+                i_star = red_flat.argmin(dim=1)  # (B,) weakest active pixel per sample
+
+                # Proposed support dropping i_star for active samples
+                test_supp_flat = final_support.view(B, HW).clone()
+                test_supp_flat[b_idx, i_star] = False
+                test_support = test_supp_flat.view(B, 1, H, W)
+
+                test_delta = final_delta.clone()
+                test_delta.view(B, C, HW)[b_idx, :, i_star] = 0.0
+
+                # Check direct success in batch
+                with torch.no_grad():
+                    x_test = torch.clamp(orig_x + test_delta, 0.0, 1.0)
+                    l_test = self.model(x_test)
+                    forward_evals += 1
+                    direct_succ = (l_test.argmax(dim=1) != y) & active_mask
+
+                # For samples where direct success failed, run repaired optimization in batch
+                repair_mask = active_mask & (~direct_succ)
+                repaired_delta = test_delta.clone()
+                repair_succ = torch.zeros(B, dtype=torch.bool, device=device)
+
+                if repair_mask.any():
+                    rep_delta, _, fwd, bwd = self._optimize_fixed_support(
+                        orig_x, y, test_support, test_delta, num_steps=self.repair_steps
+                    )
+                    forward_evals += fwd
+                    backward_evals += bwd
+                    with torch.no_grad():
+                        x_rep = torch.clamp(orig_x + rep_delta, 0.0, 1.0)
+                        l_rep = self.model(x_rep)
                         forward_evals += 1
-                        backward_evals += 1
-                        l_single.backward()
-                        g_single = x_single.grad if x_single.grad is not None else torch.zeros_like(x_single)
+                        repair_succ = (l_rep.argmax(dim=1) != y) & repair_mask
+                    repaired_delta = rep_delta
 
-                    r_costs = (g_single * curr_d).sum(dim=1).view(HW)[active_idx]
-                    sorted_order = r_costs.argsort()  # Try dropping weakest first
-
-                    for idx_pos in sorted_order:
-                        drop_pixel = active_idx[idx_pos].item()
-
-                        test_supp = curr_supp.clone()
-                        test_supp.view(1, HW)[0, drop_pixel] = False
-                        test_delta = curr_d.clone()
-                        test_delta.view(1, C, HW)[0, :, drop_pixel] = 0.0
-
-                        # Check direct success
-                        with torch.no_grad():
-                            x_test = torch.clamp(orig_x[b:b+1] + test_delta, 0.0, 1.0)
-                            l_test = self.model(x_test)
-                            forward_evals += 1
-                            direct_succ = (l_test.argmax(dim=1) != y[b:b+1]).item()
-
-                        if direct_succ:
-                            curr_supp = test_supp
-                            curr_d = test_delta
-                            active_idx = curr_supp.view(1, HW).nonzero(as_tuple=False)[:, 1]
-                            changed = True
-                            break
-
-                        # Drop-and-Repair: re-optimize remaining pixels
-                        repaired_delta, _, fwd, bwd = self._optimize_fixed_support(
-                            orig_x[b:b+1], y[b:b+1], test_supp, test_delta, num_steps=self.repair_steps
-                        )
-                        forward_evals += fwd
-                        backward_evals += bwd
-
-                        with torch.no_grad():
-                            x_rep = torch.clamp(orig_x[b:b+1] + repaired_delta, 0.0, 1.0)
-                            l_rep = self.model(x_rep)
-                            forward_evals += 1
-                            repair_succ = (l_rep.argmax(dim=1) != y[b:b+1]).item()
-
-                        if repair_succ:
-                            curr_supp = test_supp
-                            curr_d = repaired_delta
-                            active_idx = curr_supp.view(1, HW).nonzero(as_tuple=False)[:, 1]
-                            changed = True
-                            break
-
-                final_delta[b:b+1] = curr_d
-                final_support[b:b+1] = curr_supp
+                drop_succ = direct_succ | repair_succ
+                if drop_succ.any():
+                    d_mask = drop_succ.view(B, 1, 1, 1)
+                    final_support = torch.where(d_mask, test_support, final_support)
+                    chosen_delta = torch.where(direct_succ.view(B, 1, 1, 1), test_delta, repaired_delta)
+                    final_delta = torch.where(d_mask, chosen_delta, final_delta)
+                    active_counts = final_support.view(B, HW).sum(dim=1)
+                else:
+                    # No active sample could be pruned further in this pass
+                    break
 
         # Enforce exact L0 budget and box clipping as safety invariant
         x_adv_out = torch.clamp(orig_x + final_delta * final_support, 0.0, 1.0)

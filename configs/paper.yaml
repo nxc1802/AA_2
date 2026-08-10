@@ -4,13 +4,22 @@ strict: true  # Fail-fast paper validation: abort execution if any attack fails
 dataset:
   name: cifar10
   samples: 1000  # smoke: use configs/smoke.yaml (10); final paper: use configs/paper_cifar10.yaml (10000)
-  batch_size: 64
+  batch_size: 512
 
-model:
-  name: resnet18
-  checkpoint: resnet18_cifar10_best.pth
-  expected_sha256: 378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172
-  expected_clean_acc: 94.84
+# Per-method batch size configuration (default: 512). Tweak per method if needed.
+attacks_batch_size:
+  fgsm: 512
+  bim: 512
+  pgd: 512
+  cornersearch: 512
+  pgd0: 512
+  spgd: 512
+  sparse_rs: 512
+  sparsefool: 512
+  sigma_zero: 512
+  gse: 512
+  casa: 512
+  ours: 512
 
 benchmark:
   k_values: [1, 2, 4, 8, 16, 32, 64]

@@ -140,10 +140,12 @@ def get_dataloaders(
 
 def get_sample_batch_indices(
     dataset_name: str = "cifar10",
-    batch_size: int = 256,
+    batch_size: int = 512,
     num_samples: int = 1000,
     seed: int = 42,
-    hf_token: Optional[str] = HF_TOKEN
+    num_workers: Optional[int] = None,
+    hf_token: Optional[str] = HF_TOKEN,
+    pin_memory: Optional[bool] = None
 ) -> Tuple[DataLoader, list, str]:
     """Loads deterministic, class-stratified subset from Hugging Face test set for benchmark evaluation."""
     import hashlib
@@ -164,9 +166,26 @@ def get_sample_batch_indices(
         )
         selected_indices = sorted(selected_indices)
 
+    if num_workers is None:
+        num_workers = min(os.cpu_count() or 2, 4) if torch.cuda.is_available() else 0
+
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+
+    persistent_workers = True if num_workers > 0 else False
+    prefetch_factor = 2 if num_workers > 0 else None
+
     pt_dataset = HFDatasetWrapper(hf_test, transform=get_dataset_transforms(is_train=False))
     subset = Subset(pt_dataset, selected_indices)
-    loader = DataLoader(subset, batch_size=batch_size, shuffle=False, num_workers=0)
+    loader = DataLoader(
+        subset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        prefetch_factor=prefetch_factor
+    )
 
     indices_str = ",".join(map(str, selected_indices))
     indices_hash = hashlib.sha256(indices_str.encode("utf-8")).hexdigest()
@@ -175,9 +194,10 @@ def get_sample_batch_indices(
 
 def get_sample_batch(
     dataset_name: str = "cifar10",
-    batch_size: int = 256,
+    batch_size: int = 512,
     num_samples: int = 1000,
     seed: int = 42,
+    num_workers: Optional[int] = None,
     hf_token: Optional[str] = HF_TOKEN
 ) -> DataLoader:
     """Loads deterministic class-stratified subset from Hugging Face test set for benchmark evaluation."""
@@ -186,7 +206,9 @@ def get_sample_batch(
         batch_size=batch_size,
         num_samples=num_samples,
         seed=seed,
+        num_workers=num_workers,
         hf_token=hf_token
     )
     return loader
+
 

@@ -8,12 +8,18 @@ from aa.utils import get_best_device, synchronize_device, CountingModel
 from aa.metrics import evaluate_batch, compute_distortion_metrics, BatchMetrics
 
 
+from aa.cache import AttackArtifactCache
+from aa.attacks.base import AttackOutput
+
+
 def evaluate_attack(
     model: nn.Module,
     attack: Any,
     loader: DataLoader,
     device: Optional[torch.device] = None,
-    lpips_fn: Optional[Any] = None
+    lpips_fn: Optional[Any] = None,
+    cache: Optional[AttackArtifactCache] = None,
+    cache_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Evaluates an adversarial attack over a DataLoader using a single generic loop.
@@ -32,6 +38,13 @@ def evaluate_attack(
     counting_model = model if isinstance(model, CountingModel) else CountingModel(model)
     counting_model.reset_counters()
 
+    # Check Artifact Cache hit
+    cached_output: Optional[AttackOutput] = None
+    if cache is not None and cache_key is not None:
+        cached_output = cache.get(cache_key, device=device)
+        if cached_output is not None:
+            print(f"    ⚡ [CACHE HIT] Loaded cached attack artifact ({cache_key[:8]}...)", flush=True)
+
     all_clean_correct = []
     all_adv_correct = []
     all_success = []
@@ -45,17 +58,33 @@ def evaluate_attack(
     total_forward = 0
     total_backward = 0
     total_queries = 0
+    all_x_adv = []
 
     synchronize_device(device)
     start_time = time.time()
 
+    sample_offset = 0
     for x, y in loader:
-        x, y = x.to(device), y.to(device)
+        x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+        B = x.size(0)
 
-        output = attack.attack(x, y) if hasattr(attack, "attack") else attack(x, y)
-        total_forward += getattr(output, "forward_evals", 0)
-        total_backward += getattr(output, "backward_evals", 0)
-        total_queries += getattr(output, "queries", 0)
+        if cached_output is not None:
+            # Re-use pre-computed cached adversarial examples
+            x_adv_batch = cached_output.x_adv[sample_offset : sample_offset + B].to(device)
+            output = AttackOutput(
+                x_adv=x_adv_batch,
+                queries=0,
+                forward_evals=0,
+                backward_evals=0,
+                metadata=cached_output.metadata
+            )
+            sample_offset += B
+        else:
+            output = attack.attack(x, y) if hasattr(attack, "attack") else attack(x, y)
+            total_forward += getattr(output, "forward_evals", 0)
+            total_backward += getattr(output, "backward_evals", 0)
+            total_queries += getattr(output, "queries", 0)
+            all_x_adv.append(output.x_adv.detach().cpu())
 
         batch_m: BatchMetrics = evaluate_batch(counting_model, x, y, output, lpips_fn=lpips_fn)
 
@@ -72,6 +101,15 @@ def evaluate_attack(
 
     synchronize_device(device)
     elapsed_time = time.time() - start_time
+
+    if cache is not None and cache_key is not None and cached_output is None and len(all_x_adv) > 0:
+        combined_x_adv = torch.cat(all_x_adv, dim=0)
+        cache.put(cache_key, AttackOutput(
+            x_adv=combined_x_adv,
+            queries=total_queries,
+            forward_evals=total_forward,
+            backward_evals=total_backward
+        ))
 
     clean_corr_cat = torch.cat(all_clean_correct)
     adv_corr_cat = torch.cat(all_adv_correct)

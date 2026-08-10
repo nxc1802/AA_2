@@ -2,7 +2,7 @@ import argparse
 import os
 import yaml
 import json
-from aa.utils import set_seed, get_best_device, get_git_reproducibility_info
+from aa.utils import set_seed, get_best_device, enable_gpu_optimizations, get_git_reproducibility_info
 from aa.data import get_sample_batch_indices
 from aa.models import get_model
 from aa.defenses import (
@@ -14,6 +14,7 @@ from aa.defenses import (
 )
 from aa.attacks import create_attack
 from aa.benchmark import evaluate_attack
+from aa.cache import AttackArtifactCache
 
 
 DEFENSES_MAP = {
@@ -30,6 +31,8 @@ def main():
     parser.add_argument("--output", type=str, default="result/defense_benchmark_results.json", help="Path to output JSON")
     parser.add_argument("--eval-modes", nargs="+", default=["adaptive", "oblivious"], help="Evaluation modes")
     parser.add_argument("--strict", action="store_true", help="Fail-fast if any attack execution fails (recommended for paper runs)")
+    parser.add_argument("--cache-dir", type=str, default="result/attack_cache", help="Path to attack artifact cache directory")
+    parser.add_argument("--no-cache", action="store_true", help="Disable reading/writing attack artifact cache")
     args = parser.parse_args()
 
     if not os.path.exists(args.config):
@@ -38,6 +41,9 @@ def main():
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
+    # Enable CUDA/cuDNN optimizations
+    enable_gpu_optimizations()
+
     strict_mode = args.strict or cfg.get("strict", False)
     seed = cfg.get("seed", 42)
     set_seed(seed)
@@ -45,11 +51,14 @@ def main():
 
     ds_cfg = cfg.get("dataset", {})
     model_cfg = cfg.get("model", {})
+    default_batch_size = ds_cfg.get("batch_size", 512)
+
+    cache = None if args.no_cache else AttackArtifactCache(cache_dir=args.cache_dir)
 
     loader, sample_indices, sample_hash = get_sample_batch_indices(
         dataset_name=ds_cfg.get("name", "cifar10"),
-        batch_size=ds_cfg.get("batch_size", 64),
-        num_samples=ds_cfg.get("samples", 100),
+        batch_size=default_batch_size,
+        num_samples=ds_cfg.get("samples", 1000),
         seed=seed
     )
 
@@ -62,6 +71,7 @@ def main():
 
     sparse_attacks = cfg.get("defense_attacks", ["pgd0", "sparse_rs", "ours"])
     k_defense = cfg.get("defense_k", 16)
+    model_id = getattr(base_model, "checkpoint_sha256", None) or model_cfg.get("name", "resnet18")
 
     all_results = {
         "metadata": {
@@ -87,8 +97,23 @@ def main():
             for atk_name in sparse_attacks:
                 try:
                     atk_cfg = cfg.get("attacks_kwargs", {}).get(atk_name, {})
-                    attack = create_attack(atk_name, model=defended_model, k=k_defense, **atk_cfg)
-                    res = evaluate_attack(defended_model, attack, loader, device=device)
+                    clean_atk_kwargs = {k: v for k, v in atk_cfg.items() if k not in ("k", "max_k")}
+
+                    if mode == "oblivious" and cache is not None:
+                        # In oblivious mode, adversarial examples are generated on undefended base_model
+                        cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed, k=k_defense)
+                        if not cache.has(cache_key):
+                            print(f"    [Oblivious Cache Miss] Pre-generating {atk_name} on base model...", flush=True)
+                            base_attack = create_attack(atk_name, model=base_model, k=k_defense, **clean_atk_kwargs)
+                            evaluate_attack(base_model, base_attack, loader, device=device, cache=cache, cache_key=cache_key)
+
+                        # Evaluate cached base model attack on defended_model using evaluate_defended
+                        attack = create_attack(atk_name, model=defended_model, k=k_defense, **clean_atk_kwargs)
+                        res = evaluate_attack(defended_model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                    else:
+                        attack = create_attack(atk_name, model=defended_model, k=k_defense, **clean_atk_kwargs)
+                        res = evaluate_attack(defended_model, attack, loader, device=device)
+
                     all_results["defenses"][def_name][mode][atk_name] = res
                     print(f"    [{mode}] {atk_name} -> Defended Clean Acc: {res['clean_accuracy']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, ASR: {res['asr']:.2f}%")
                 except Exception as e:

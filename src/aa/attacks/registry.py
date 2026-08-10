@@ -6,6 +6,7 @@ import torch.nn as nn
 from aa.attacks.base import Attack
 from aa.attacks.dense import FGSM, BIM, PGD
 from aa.attacks.proposed import SparseFeatureAttack
+from aa.attacks.casa import CoalitionSparseAttack
 from aa.attacks.external.cornersearch import CornerSearch
 from aa.attacks.external.pgd0 import PGD0
 from aa.attacks.external.spgd import SparsePGD
@@ -34,6 +35,8 @@ ATTACK_REGISTRY: Dict[str, AttackSpec] = {
     "sigma_zero": AttackSpec(name="Sigma-Zero", factory=SigmaZero, mode="minimal"),
     "gse": AttackSpec(name="GSE", factory=GSE, mode="minimal"),
     "ours": AttackSpec(name="Ours", factory=SparseFeatureAttack, mode="budget"),
+    "casa": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
+    "ours_v2": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
 }
 
 

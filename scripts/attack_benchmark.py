@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--config", type=str, default="configs/paper.yaml", help="Path to experiment config YAML")
     parser.add_argument("--output", type=str, default="result/benchmark_results.json", help="Path to output JSON")
     parser.add_argument("--strict", action="store_true", help="Fail-fast if any attack execution fails (recommended for paper runs)")
+    parser.add_argument("--attacks", type=str, default=None, help="Comma-separated list of attack names to run (e.g. 'casa' or 'ours_v2,ours')")
     args = parser.parse_args()
 
     if not os.path.exists(args.config):
@@ -45,7 +46,10 @@ def main():
         device=device
     )
 
-    attack_names = cfg.get("attacks", ["pgd", "ours"])
+    if args.attacks:
+        attack_names = [a.strip() for a in args.attacks.split(",") if a.strip()]
+    else:
+        attack_names = cfg.get("attacks", ["pgd", "ours"])
     k_values = bench_cfg.get("k_values", [1, 2, 4, 8, 16, 32, 64])
     attacks_kwargs = cfg.get("attacks_kwargs", {})
 

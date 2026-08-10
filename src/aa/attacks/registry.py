@@ -34,9 +34,10 @@ ATTACK_REGISTRY: Dict[str, AttackSpec] = {
     "sparsefool": AttackSpec(name="SparseFool", factory=SparseFool, mode="minimal"),
     "sigma_zero": AttackSpec(name="Sigma-Zero", factory=SigmaZero, mode="minimal"),
     "gse": AttackSpec(name="GSE", factory=GSE, mode="minimal"),
-    "ours": AttackSpec(name="Ours", factory=SparseFeatureAttack, mode="budget"),
+    "ours": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
     "casa": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
     "ours_v2": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
+    "ours_v1": AttackSpec(name="Ours-v1", factory=SparseFeatureAttack, mode="budget"),
 }
 
 

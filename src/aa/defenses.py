@@ -37,18 +37,34 @@ def median_filter(x: torch.Tensor, kernel_size: int = 3) -> torch.Tensor:
     return filtered.reshape(B, C, H, W)
 
 
+from concurrent.futures import ThreadPoolExecutor
+import os
+
+
+def _compress_single_jpeg(img_np: np.ndarray, quality: int) -> np.ndarray:
+    pil_img = Image.fromarray(img_np)
+    buf = BytesIO()
+    pil_img.save(buf, format="JPEG", quality=quality)
+    buf.seek(0)
+    reconstructed = Image.open(buf).convert("RGB")
+    return np.array(reconstructed).astype(np.float32) / 255.0
+
+
 def jpeg_compression(x: torch.Tensor, quality: int = 75) -> torch.Tensor:
-    """Applies JPEG compression to tensor x (B, C, H, W) in range [0, 1]."""
+    """Applies JPEG compression to tensor x (B, C, H, W) in range [0, 1].
+    Parallelized across available CPU threads via ThreadPoolExecutor.
+    """
     device = x.device
     np_imgs = (x.detach().cpu().permute(0, 2, 3, 1).numpy() * 255.0).astype(np.uint8)
-    defended_np = []
-    for img_np in np_imgs:
-        pil_img = Image.fromarray(img_np)
-        buf = BytesIO()
-        pil_img.save(buf, format="JPEG", quality=quality)
-        buf.seek(0)
-        reconstructed = Image.open(buf).convert("RGB")
-        defended_np.append(np.array(reconstructed).astype(np.float32) / 255.0)
+    B = len(np_imgs)
+
+    if B <= 1:
+        defended_np = [_compress_single_jpeg(np_imgs[0], quality)]
+    else:
+        num_workers = min(B, os.cpu_count() or 4)
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            defended_np = list(executor.map(lambda img: _compress_single_jpeg(img, quality), np_imgs))
+
     defended_tensor = torch.from_numpy(np.stack(defended_np)).permute(0, 3, 1, 2).to(device)
     return defended_tensor
 

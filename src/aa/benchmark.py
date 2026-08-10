@@ -19,7 +19,8 @@ def evaluate_attack(
     device: Optional[torch.device] = None,
     lpips_fn: Optional[Any] = None,
     cache: Optional[AttackArtifactCache] = None,
-    cache_key: Optional[str] = None
+    cache_key: Optional[str] = None,
+    precomputed_output: Optional[AttackOutput] = None
 ) -> Dict[str, Any]:
     """
     Evaluates an adversarial attack over a DataLoader using a single generic loop.
@@ -38,9 +39,9 @@ def evaluate_attack(
     counting_model = model if isinstance(model, CountingModel) else CountingModel(model)
     counting_model.reset_counters()
 
-    # Check Artifact Cache hit
-    cached_output: Optional[AttackOutput] = None
-    if cache is not None and cache_key is not None:
+    # Check Artifact Cache hit or precomputed output
+    cached_output: Optional[AttackOutput] = precomputed_output
+    if cached_output is None and cache is not None and cache_key is not None:
         cached_output = cache.get(cache_key, device=device)
         if cached_output is not None:
             print(f"    ⚡ [CACHE HIT] Loaded cached attack artifact ({cache_key[:8]}...)", flush=True)
@@ -116,18 +117,21 @@ def evaluate_attack(
     else:
         final_attack_gen_runtime = attack_gen_time
 
-    if cache is not None and cache_key is not None and not is_cache_hit and len(all_x_adv) > 0:
-        combined_x_adv = torch.cat(all_x_adv, dim=0)
-        cache.put(
-            cache_key,
-            AttackOutput(
-                x_adv=combined_x_adv,
-                queries=total_queries,
-                forward_evals=total_forward,
-                backward_evals=total_backward
-            ),
-            attack_generation_runtime=final_attack_gen_runtime
-        )
+    if cache is not None and cache_key is not None and not cache.has(cache_key):
+        if precomputed_output is not None:
+            cache.put(cache_key, precomputed_output, attack_generation_runtime=final_attack_gen_runtime)
+        elif len(all_x_adv) > 0:
+            combined_x_adv = torch.cat(all_x_adv, dim=0)
+            cache.put(
+                cache_key,
+                AttackOutput(
+                    x_adv=combined_x_adv,
+                    queries=total_queries,
+                    forward_evals=total_forward,
+                    backward_evals=total_backward
+                ),
+                attack_generation_runtime=final_attack_gen_runtime
+            )
 
     clean_corr_cat = torch.cat(all_clean_correct)
     adv_corr_cat = torch.cat(all_adv_correct)

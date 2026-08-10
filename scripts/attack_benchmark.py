@@ -3,6 +3,7 @@ import os
 import yaml
 import json
 import torch
+from typing import Optional, Dict, Any
 from aa.utils import set_seed, get_best_device, enable_gpu_optimizations, get_git_reproducibility_info
 from aa.data import get_sample_batch_indices
 from aa.models import get_model
@@ -120,38 +121,38 @@ def main():
                 attack_kwargs=target_kwargs,
                 seed=seed,
                 k=target_k,
-                git_commit=git_commit
+                git_commit=git_commit,
+                defense_info=None
             ) if cache else None
 
+            precomputed = None
             if gpu_scheduler.is_multi_gpu() and (cache is None or not cache.has(cache_key)):
-                # Multi-GPU execution: shard evaluation across available GPUs
-                def model_fn():
-                    return get_model(
-                        model_name=model_cfg.get("name", "resnet18"),
-                        checkpoint_path=model_cfg.get("checkpoint", None),
-                        expected_sha256=model_cfg.get("expected_sha256", None)
-                    )
+                # Multi-GPU execution: shard evaluation across available GPUs using primitive serializable args
+                kwargs_to_pass = dict(target_kwargs)
+                if target_k is not None:
+                    kwargs_to_pass["k"] = target_k
 
-                def attack_factory(m):
-                    kwargs_to_pass = dict(target_kwargs)
-                    if target_k is not None:
-                        kwargs_to_pass["k"] = target_k
-                    return create_attack(target_attack_name, model=m, **kwargs_to_pass)
-
-                sharded_output = gpu_scheduler.run_sharded_attack(
-                    model_fn=model_fn,
-                    attack_factory=attack_factory,
-                    dataset=loader.dataset,
+                precomputed = gpu_scheduler.run_sharded_attack(
+                    model_name=model_cfg.get("name", "resnet18"),
+                    checkpoint_path=model_cfg.get("checkpoint", None),
+                    expected_sha256=model_cfg.get("expected_sha256", None),
+                    attack_name=target_attack_name,
+                    attack_kwargs=kwargs_to_pass,
+                    seed=seed,
+                    dataset_name=ds_cfg.get("name", "cifar10"),
+                    selected_sample_indices=sample_indices,
                     batch_size=atk_batch_size
                 )
-                if cache and cache_key:
-                    cache.put(cache_key, sharded_output)
 
             kwargs_to_pass = dict(target_kwargs)
             if target_k is not None:
                 kwargs_to_pass["k"] = target_k
             attack_inst = create_attack(target_attack_name, model=model, **kwargs_to_pass)
-            return evaluate_attack(model, attack_inst, loader, device=device, cache=cache, cache_key=cache_key)
+            return evaluate_attack(
+                model, attack_inst, loader,
+                device=device, cache=cache, cache_key=cache_key,
+                precomputed_output=precomputed
+            )
 
         if mode == "dense":
             print(f"--> Running DENSE attack: {atk_name} (batch_size={atk_batch_size})...", flush=True)

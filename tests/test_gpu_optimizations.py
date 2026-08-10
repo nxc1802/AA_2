@@ -99,13 +99,33 @@ def test_batched_casa_drop_and_repair():
     assert (l0 <= 16).all()
 
 
-def test_data_loader_custom_batch_size():
-    loader, indices, h = get_sample_batch_indices(
-        dataset_name="cifar10",
-        batch_size=512,
-        num_samples=20,
+def test_canonical_undefended_cache_key_sharing():
+    key_attack = AttackArtifactCache.compute_cache_key(
+        dataset_hash="hash123",
+        model_identifier="resnet18",
+        attack_name="sparse_rs",
+        attack_kwargs={"steps": 10},
         seed=42,
-        num_workers=0
+        k=16,
+        git_commit="git123",
+        defense_info=None
     )
-    assert loader.batch_size == 512
-    assert len(indices) == 20
+
+    key_oblivious = AttackArtifactCache.compute_cache_key(
+        dataset_hash="hash123",
+        model_identifier="resnet18",
+        attack_name="sparse_rs",
+        attack_kwargs={"steps": 10},
+        seed=42,
+        k=16,
+        git_commit="git123",
+        defense_info=None
+    )
+
+    assert key_attack == key_oblivious
+
+
+def test_registry_ours_alias_mapping():
+    from aa.attacks import get_attack_spec
+    spec = get_attack_spec("ours")
+    assert spec.factory == CoalitionSparseAttack

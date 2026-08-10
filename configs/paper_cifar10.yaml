@@ -11,6 +11,12 @@ dataset:
   samples: 1000  # Use 10000 for final paper tables
   batch_size: 512
 
+model:
+  name: resnet18
+  checkpoint: resnet18_cifar10_best.pth
+  expected_sha256: 378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172
+  expected_clean_acc: 94.84
+
 # Per-method batch size configuration (default: 512). Tweak per method if needed.
 attacks_batch_size:
   fgsm: 512
@@ -112,6 +118,26 @@ attacks_kwargs:
 
   ours:
     steps: 25
+    inner_steps: 10
+    candidate_pool_size: 4
+    alpha: 0.015686274  # 4/255
+    repair_steps: 5
+    drop_and_repair: true
+    pair_exploration: true
+    pair_search_every: 5
+
+  casa:
+    steps: 25
+    inner_steps: 10
+    candidate_pool_size: 4
+    alpha: 0.015686274  # 4/255
+    repair_steps: 5
+    drop_and_repair: true
+    pair_exploration: true
+    pair_search_every: 5
+
+  ours_v1:
+    steps: 25
     alpha: 0.015686274  # 4/255
     feature_weight: 1.0
     feature_guidance: true
@@ -120,4 +146,4 @@ attacks_kwargs:
     interaction_mode: cpa
     loss_fn: ce  # options: ce | margin
     pruning: true
-    pruning_max_passes: 5
+    pruning_max_passes: 10

@@ -75,6 +75,26 @@ attacks_kwargs:
 
   ours:
     steps: 5  # reduced for smoke
+    inner_steps: 2
+    candidate_pool_size: 4
+    alpha: 0.015686274  # 4/255
+    repair_steps: 2
+    drop_and_repair: true
+    pair_exploration: true
+    pair_search_every: 2
+
+  casa:
+    steps: 5  # reduced for smoke
+    inner_steps: 2
+    candidate_pool_size: 4
+    alpha: 0.015686274  # 4/255
+    repair_steps: 2
+    drop_and_repair: true
+    pair_exploration: true
+    pair_search_every: 2
+
+  ours_v1:
+    steps: 5  # reduced for smoke
     alpha: 0.015686274  # 4/255
     feature_weight: 1.0
     feature_guidance: true

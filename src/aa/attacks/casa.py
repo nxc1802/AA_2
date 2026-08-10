@@ -323,12 +323,13 @@ class CoalitionSparseAttack(Attack):
                     delta_S = torch.where(p_acc_b, pair_delta, delta_S)
                     margin_S = torch.where(pair_accept, pair_margin, margin_S)
 
+                    # Update global best accepted solution immediately
+                    best_delta = torch.where(p_acc_b, pair_delta, best_delta)
+                    best_support_mask = torch.where(p_acc_b, pair_support_mask, best_support_mask)
+                    best_margin = torch.where(pair_accept, pair_margin, best_margin)
+
         # -------------------------------------------------------------
         # Stage 8: Drop-and-Repair Support Minimization (for successful samples)
-        # -------------------------------------------------------------
-        final_delta = best_delta.clone()
-        # -------------------------------------------------------------
-        # Stage 8: Batched Drop-and-Repair Support Minimization
         # -------------------------------------------------------------
         final_delta = best_delta.clone()
         final_support = best_support_mask.clone()
@@ -359,52 +360,62 @@ class CoalitionSparseAttack(Attack):
                     g_curr = x_curr.grad if x_curr.grad is not None else torch.zeros_like(x_curr)
 
                 redundancy = (g_curr * final_delta).sum(dim=1, keepdim=True)  # (B, 1, H, W)
-                red_flat = redundancy.view(B, HW).clone()
-                red_flat[~final_support.view(B, HW)] = float("inf")
-                i_star = red_flat.argmin(dim=1)  # (B,) weakest active pixel per sample
+                red_flat = redundancy.reshape(B, HW).clone()
+                red_flat[~final_support.reshape(B, HW)] = float("inf")
 
-                # Proposed support dropping i_star for active samples
-                test_supp_flat = final_support.view(B, HW).clone()
-                test_supp_flat[b_idx, i_star] = False
-                test_support = test_supp_flat.view(B, 1, H, W)
+                # Sort active pixels per sample by ascending redundancy cost
+                sorted_red_indices = red_flat.argsort(dim=1)  # (B, HW)
 
-                test_delta = final_delta.clone()
-                test_delta.reshape(B, C, HW)[b_idx, :, i_star] = 0.0
+                any_pruned_in_pass = False
+                max_rank_to_try = min(4, self.k)
 
-                # Check direct success in batch
-                with torch.no_grad():
-                    x_test = torch.clamp(orig_x + test_delta, 0.0, 1.0)
-                    l_test = self.model(x_test)
-                    forward_evals += 1
-                    direct_succ = (l_test.argmax(dim=1) != y) & active_mask
+                for rank_k in range(max_rank_to_try):
+                    i_star = sorted_red_indices[:, rank_k]  # (B,) pixel at rank_k for each sample
+                    
+                    # Proposed support dropping i_star for active samples
+                    test_supp_flat = final_support.reshape(B, HW).clone()
+                    test_supp_flat[b_idx, i_star] = False
+                    test_support = test_supp_flat.reshape(B, 1, H, W)
 
-                # For samples where direct success failed, run repaired optimization in batch
-                repair_mask = active_mask & (~direct_succ)
-                repaired_delta = test_delta.clone()
-                repair_succ = torch.zeros(B, dtype=torch.bool, device=device)
+                    test_delta = final_delta.clone()
+                    test_delta.reshape(B, C, HW)[b_idx, :, i_star] = 0.0
 
-                if repair_mask.any():
-                    rep_delta, _, fwd, bwd = self._optimize_fixed_support(
-                        orig_x, y, test_support, test_delta, num_steps=self.repair_steps
-                    )
-                    forward_evals += fwd
-                    backward_evals += bwd
+                    # Check direct success in batch
                     with torch.no_grad():
-                        x_rep = torch.clamp(orig_x + rep_delta, 0.0, 1.0)
-                        l_rep = self.model(x_rep)
+                        x_test = torch.clamp(orig_x + test_delta, 0.0, 1.0)
+                        l_test = self.model(x_test)
                         forward_evals += 1
-                        repair_succ = (l_rep.argmax(dim=1) != y) & repair_mask
-                    repaired_delta = rep_delta
+                        direct_succ = (l_test.argmax(dim=1) != y) & active_mask
 
-                drop_succ = direct_succ | repair_succ
-                if drop_succ.any():
-                    d_mask = drop_succ.view(B, 1, 1, 1)
-                    final_support = torch.where(d_mask, test_support, final_support)
-                    chosen_delta = torch.where(direct_succ.view(B, 1, 1, 1), test_delta, repaired_delta)
-                    final_delta = torch.where(d_mask, chosen_delta, final_delta)
-                    active_counts = final_support.view(B, HW).sum(dim=1)
-                else:
-                    # No active sample could be pruned further in this pass
+                    # For samples where direct success failed, run repaired optimization in batch
+                    repair_mask = active_mask & (~direct_succ)
+                    repaired_delta = test_delta.clone()
+                    repair_succ = torch.zeros(B, dtype=torch.bool, device=device)
+
+                    if repair_mask.any():
+                        rep_delta, _, fwd, bwd = self._optimize_fixed_support(
+                            orig_x, y, test_support, test_delta, num_steps=self.repair_steps
+                        )
+                        forward_evals += fwd
+                        backward_evals += bwd
+                        with torch.no_grad():
+                            x_rep = torch.clamp(orig_x + rep_delta, 0.0, 1.0)
+                            l_rep = self.model(x_rep)
+                            forward_evals += 1
+                            repair_succ = (l_rep.argmax(dim=1) != y) & repair_mask
+                        repaired_delta = rep_delta
+
+                    drop_succ = direct_succ | repair_succ
+                    if drop_succ.any():
+                        d_mask = drop_succ.reshape(B, 1, 1, 1)
+                        final_support = torch.where(d_mask, test_support, final_support)
+                        chosen_delta = torch.where(direct_succ.reshape(B, 1, 1, 1), test_delta, repaired_delta)
+                        final_delta = torch.where(d_mask, chosen_delta, final_delta)
+                        active_counts = final_support.reshape(B, HW).sum(dim=1)
+                        any_pruned_in_pass = True
+                        break
+
+                if not any_pruned_in_pass:
                     break
 
         # Enforce exact L0 budget and box clipping as safety invariant

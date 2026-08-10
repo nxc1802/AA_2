@@ -70,6 +70,9 @@ def main():
 
     model_id = getattr(model, "checkpoint_sha256", None) or model_cfg.get("name", "resnet18")
 
+    repro_info = get_git_reproducibility_info()
+    git_commit = repro_info.get("git_commit", "unknown")
+
     all_results = {
         "metadata": {
             "config": cfg,
@@ -78,7 +81,7 @@ def main():
             "num_gpus": gpu_scheduler.num_gpus,
             "sample_indices_hash": sample_hash,
             "model_checkpoint_sha256": getattr(model, "checkpoint_sha256", None),
-            "reproducibility": get_git_reproducibility_info()
+            "reproducibility": repro_info
         },
         "results": {}
     }
@@ -109,15 +112,54 @@ def main():
         mode = spec.mode
         all_results["results"][atk_name] = {}
 
+        def _run_single_or_multigpu(target_attack_name: str, target_k: Optional[int], target_kwargs: dict) -> Dict[str, Any]:
+            cache_key = cache.compute_cache_key(
+                dataset_hash=sample_hash,
+                model_identifier=model_id,
+                attack_name=target_attack_name,
+                attack_kwargs=target_kwargs,
+                seed=seed,
+                k=target_k,
+                git_commit=git_commit
+            ) if cache else None
+
+            if gpu_scheduler.is_multi_gpu() and (cache is None or not cache.has(cache_key)):
+                # Multi-GPU execution: shard evaluation across available GPUs
+                def model_fn():
+                    return get_model(
+                        model_name=model_cfg.get("name", "resnet18"),
+                        checkpoint_path=model_cfg.get("checkpoint", None),
+                        expected_sha256=model_cfg.get("expected_sha256", None)
+                    )
+
+                def attack_factory(m):
+                    kwargs_to_pass = dict(target_kwargs)
+                    if target_k is not None:
+                        kwargs_to_pass["k"] = target_k
+                    return create_attack(target_attack_name, model=m, **kwargs_to_pass)
+
+                sharded_output = gpu_scheduler.run_sharded_attack(
+                    model_fn=model_fn,
+                    attack_factory=attack_factory,
+                    dataset=loader.dataset,
+                    batch_size=atk_batch_size
+                )
+                if cache and cache_key:
+                    cache.put(cache_key, sharded_output)
+
+            kwargs_to_pass = dict(target_kwargs)
+            if target_k is not None:
+                kwargs_to_pass["k"] = target_k
+            attack_inst = create_attack(target_attack_name, model=model, **kwargs_to_pass)
+            return evaluate_attack(model, attack_inst, loader, device=device, cache=cache, cache_key=cache_key)
+
         if mode == "dense":
             print(f"--> Running DENSE attack: {atk_name} (batch_size={atk_batch_size})...", flush=True)
             try:
                 clean_atk_kwargs = dict(atk_kwargs)
-                cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed) if cache else None
-                attack = create_attack(atk_name, model=model, **clean_atk_kwargs)
-                res = evaluate_attack(model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                res = _run_single_or_multigpu(atk_name, None, clean_atk_kwargs)
                 all_results["results"][atk_name]["dense"] = res
-                print(f"    [DENSE] ASR: {res['asr']:.2f}%, Clean Acc: {res['clean_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s", flush=True)
+                print(f"    [DENSE] ASR: {res['asr']:.2f}%, Clean Acc: {res['clean_accuracy']:.2f}%, Gen Runtime: {res['attack_generation_runtime']:.2f}s, Cache Hit: {res['cache_hit']}", flush=True)
             except Exception as e:
                 print(f"    ⚠️ Failed running dense attack {atk_name}: {e}", flush=True)
                 if strict_mode:
@@ -129,13 +171,11 @@ def main():
             print(f"--> Running PROGRESSIVE attack: {atk_name} (Kmax={k_max}, batch_size={atk_batch_size})...", flush=True)
             try:
                 clean_atk_kwargs = {k: v for k, v in atk_kwargs.items() if k not in ("k", "max_k")}
-                cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed, k=k_max) if cache else None
-                attack = create_attack(atk_name, model=model, k=k_max, **clean_atk_kwargs)
-                base_res = evaluate_attack(model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                base_res = _run_single_or_multigpu(atk_name, k_max, clean_atk_kwargs)
                 derived_curve = derive_progressive_asr_curve(base_res, k_values)
                 all_results["results"][atk_name] = derived_curve
                 k_max_asr = derived_curve.get(f"k_{k_max}", {}).get("asr", 0.0)
-                print(f"    [PROGRESSIVE] ASR@{k_max}: {k_max_asr:.2f}%, Clean Acc: {base_res['clean_accuracy']:.2f}%, Runtime: {base_res['runtime_seconds']:.2f}s", flush=True)
+                print(f"    [PROGRESSIVE] ASR@{k_max}: {k_max_asr:.2f}%, Clean Acc: {base_res['clean_accuracy']:.2f}%, Gen Runtime: {base_res['attack_generation_runtime']:.2f}s, Cache Hit: {base_res['cache_hit']}", flush=True)
             except Exception as e:
                 print(f"    ⚠️ Failed running progressive attack {atk_name}: {e}", flush=True)
                 if strict_mode:
@@ -146,12 +186,10 @@ def main():
             print(f"--> Running MINIMAL support attack: {atk_name} (batch_size={atk_batch_size})...", flush=True)
             try:
                 clean_atk_kwargs = dict(atk_kwargs)
-                cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed) if cache else None
-                attack = create_attack(atk_name, model=model, **clean_atk_kwargs)
-                base_res = evaluate_attack(model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                base_res = _run_single_or_multigpu(atk_name, None, clean_atk_kwargs)
                 derived_curve = derive_minimal_asr_curve(base_res, k_values)
                 all_results["results"][atk_name] = derived_curve
-                print(f"    [MINIMAL] Median L0: {base_res['metrics']['succ_l0_median']}, Derived ASR@16: {derived_curve.get('k_16', {}).get('asr', 0.0):.2f}%", flush=True)
+                print(f"    [MINIMAL] Median L0: {base_res['metrics']['succ_l0_median']}, Derived ASR@16: {derived_curve.get('k_16', {}).get('asr', 0.0):.2f}%, Cache Hit: {base_res['cache_hit']}", flush=True)
             except Exception as e:
                 print(f"    ⚠️ Failed running minimal attack {atk_name}: {e}", flush=True)
                 if strict_mode:
@@ -163,11 +201,9 @@ def main():
             for k in k_values:
                 try:
                     clean_atk_kwargs = {key: val for key, val in atk_kwargs.items() if key not in ("k", "max_k")}
-                    cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed, k=k) if cache else None
-                    attack = create_attack(atk_name, model=model, k=k, **clean_atk_kwargs)
-                    res = evaluate_attack(model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                    res = _run_single_or_multigpu(atk_name, k, clean_atk_kwargs)
                     all_results["results"][atk_name][f"k_{k}"] = res
-                    print(f"    (K={k}) ASR: {res['asr']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, Runtime: {res['runtime_seconds']:.2f}s", flush=True)
+                    print(f"    (K={k}) ASR: {res['asr']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, Gen Runtime: {res['attack_generation_runtime']:.2f}s, Cache Hit: {res['cache_hit']}", flush=True)
                 except Exception as e:
                     print(f"    ⚠️ Failed running {atk_name} (K={k}): {e}", flush=True)
                     if strict_mode:

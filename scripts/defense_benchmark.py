@@ -73,6 +73,9 @@ def main():
     k_defense = cfg.get("defense_k", 16)
     model_id = getattr(base_model, "checkpoint_sha256", None) or model_cfg.get("name", "resnet18")
 
+    repro_info = get_git_reproducibility_info()
+    git_commit = repro_info.get("git_commit", "unknown")
+
     all_results = {
         "metadata": {
             "config": cfg,
@@ -80,7 +83,7 @@ def main():
             "device": str(device),
             "sample_indices_hash": sample_hash,
             "model_checkpoint_sha256": getattr(base_model, "checkpoint_sha256", None),
-            "reproducibility": get_git_reproducibility_info()
+            "reproducibility": repro_info
         },
         "defenses": {}
     }
@@ -101,13 +104,30 @@ def main():
 
                     if mode == "oblivious" and cache is not None:
                         # In oblivious mode, adversarial examples are generated on undefended base_model
-                        cache_key = cache.compute_cache_key(sample_hash, model_id, atk_name, clean_atk_kwargs, seed, k=k_defense)
+                        oblivious_def_info = {"name": "none", "mode": "oblivious"}
+                        cache_key = cache.compute_cache_key(
+                            sample_hash, model_id, atk_name, clean_atk_kwargs, seed,
+                            k=k_defense, git_commit=git_commit, defense_info=oblivious_def_info
+                        )
                         if not cache.has(cache_key):
                             print(f"    [Oblivious Cache Miss] Pre-generating {atk_name} on base model...", flush=True)
                             base_attack = create_attack(atk_name, model=base_model, k=k_defense, **clean_atk_kwargs)
                             evaluate_attack(base_model, base_attack, loader, device=device, cache=cache, cache_key=cache_key)
 
-                        # Evaluate cached base model attack on defended_model using evaluate_defended
+                        # Evaluate cached base model attack on defended_model
+                        attack = create_attack(atk_name, model=defended_model, k=k_defense, **clean_atk_kwargs)
+                        res = evaluate_attack(defended_model, attack, loader, device=device, cache=cache, cache_key=cache_key)
+                    elif mode == "adaptive" and cache is not None:
+                        # In adaptive mode, attack is generated against defended_model
+                        adaptive_def_info = {
+                            "name": def_name,
+                            "params": getattr(defense_obj, "__dict__", {}),
+                            "mode": "adaptive"
+                        }
+                        cache_key = cache.compute_cache_key(
+                            sample_hash, model_id, atk_name, clean_atk_kwargs, seed,
+                            k=k_defense, git_commit=git_commit, defense_info=adaptive_def_info
+                        )
                         attack = create_attack(atk_name, model=defended_model, k=k_defense, **clean_atk_kwargs)
                         res = evaluate_attack(defended_model, attack, loader, device=device, cache=cache, cache_key=cache_key)
                     else:
@@ -115,7 +135,7 @@ def main():
                         res = evaluate_attack(defended_model, attack, loader, device=device)
 
                     all_results["defenses"][def_name][mode][atk_name] = res
-                    print(f"    [{mode}] {atk_name} -> Defended Clean Acc: {res['clean_accuracy']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, ASR: {res['asr']:.2f}%")
+                    print(f"    [{mode}] {atk_name} -> Defended Clean Acc: {res['clean_accuracy']:.2f}%, Cond Robust Acc: {res['conditional_robust_accuracy']:.2f}%, ASR: {res['asr']:.2f}%, Gen Runtime: {res['attack_generation_runtime']:.2f}s, Cache Hit: {res['cache_hit']}")
                 except Exception as e:
                     print(f"    ⚠️ Failed {atk_name} on {def_name} [{mode}]: {e}")
                     if strict_mode:

@@ -32,7 +32,9 @@ def test_artifact_cache_roundtrip():
         attack_name="pgd",
         attack_kwargs={"steps": 20, "eps": 0.03137},
         seed=42,
-        k=16
+        k=16,
+        git_commit="git_abc123",
+        defense_info={"name": "jpeg", "params": {"quality": 75}, "mode": "adaptive"}
     )
 
     assert not cache.has(cache_key)
@@ -46,7 +48,7 @@ def test_artifact_cache_roundtrip():
         metadata={"k": 16}
     )
 
-    cache.put(cache_key, output)
+    cache.put(cache_key, output, attack_generation_runtime=1.23)
     assert cache.has(cache_key)
 
     loaded = cache.get(cache_key)
@@ -56,6 +58,7 @@ def test_artifact_cache_roundtrip():
     assert loaded.forward_evals == 20
     assert loaded.backward_evals == 20
     assert loaded.metadata["k"] == 16
+    assert loaded.metadata["attack_generation_runtime"] == 1.23
 
     if os.path.exists(test_cache_dir):
         shutil.rmtree(test_cache_dir)

@@ -32,9 +32,9 @@ def median_filter(x: torch.Tensor, kernel_size: int = 3) -> torch.Tensor:
     x_padded = F.pad(x, (padding, padding, padding, padding), mode="reflect")
     B, C, H, W = x.shape
     unfolded = F.unfold(x_padded, kernel_size=kernel_size, padding=0)
-    unfolded = unfolded.view(B, C, kernel_size * kernel_size, H * W)
+    unfolded = unfolded.reshape(B, C, kernel_size * kernel_size, H * W)
     filtered = unfolded.median(dim=2).values
-    return filtered.view(B, C, H, W)
+    return filtered.reshape(B, C, H, W)
 
 
 def jpeg_compression(x: torch.Tensor, quality: int = 75) -> torch.Tensor:

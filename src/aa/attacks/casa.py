@@ -254,12 +254,12 @@ class CoalitionSparseAttack(Attack):
 
             # Warm-start RGB values for new candidate j_star based on grad_S
             warm_delta = delta_S.clone()
-            warm_delta.view(B, C, HW)[b_idx, :, i_star] = 0.0
+            warm_delta.reshape(B, C, HW)[b_idx, :, i_star] = 0.0
 
-            grad_j = grad_S.view(B, C, HW)[b_idx, :, j_star]
-            x_j = orig_x.view(B, C, HW)[b_idx, :, j_star]
+            grad_j = grad_S.reshape(B, C, HW)[b_idx, :, j_star]
+            x_j = orig_x.reshape(B, C, HW)[b_idx, :, j_star]
             target_val = torch.where(grad_j > 0, 1.0 - x_j, -x_j)
-            warm_delta.view(B, C, HW)[b_idx, :, j_star] = self.alpha * target_val.sign()
+            warm_delta.reshape(B, C, HW)[b_idx, :, j_star] = self.alpha * target_val.sign()
 
             # Re-optimize RGB on proposed support
             proposed_delta, proposed_margin, fwd, bwd = self._optimize_fixed_support(
@@ -369,7 +369,7 @@ class CoalitionSparseAttack(Attack):
                 test_support = test_supp_flat.view(B, 1, H, W)
 
                 test_delta = final_delta.clone()
-                test_delta.view(B, C, HW)[b_idx, :, i_star] = 0.0
+                test_delta.reshape(B, C, HW)[b_idx, :, i_star] = 0.0
 
                 # Check direct success in batch
                 with torch.no_grad():

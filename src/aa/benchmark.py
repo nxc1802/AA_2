@@ -61,7 +61,8 @@ def evaluate_attack(
     all_x_adv = []
 
     synchronize_device(device)
-    start_time = time.time()
+    overall_start_time = time.time()
+    attack_gen_time = 0.0
 
     sample_offset = 0
     for x, y in loader:
@@ -73,14 +74,18 @@ def evaluate_attack(
             x_adv_batch = cached_output.x_adv[sample_offset : sample_offset + B].to(device)
             output = AttackOutput(
                 x_adv=x_adv_batch,
-                queries=0,
-                forward_evals=0,
-                backward_evals=0,
+                queries=cached_output.queries,
+                forward_evals=cached_output.forward_evals,
+                backward_evals=cached_output.backward_evals,
                 metadata=cached_output.metadata
             )
             sample_offset += B
         else:
+            t0_gen = time.time()
             output = attack.attack(x, y) if hasattr(attack, "attack") else attack(x, y)
+            synchronize_device(device)
+            attack_gen_time += time.time() - t0_gen
+
             total_forward += getattr(output, "forward_evals", 0)
             total_backward += getattr(output, "backward_evals", 0)
             total_queries += getattr(output, "queries", 0)
@@ -100,16 +105,29 @@ def evaluate_attack(
             all_lpips.append(batch_m.lpips.cpu())
 
     synchronize_device(device)
-    elapsed_time = time.time() - start_time
+    elapsed_time = time.time() - overall_start_time
 
-    if cache is not None and cache_key is not None and cached_output is None and len(all_x_adv) > 0:
+    is_cache_hit = cached_output is not None
+    if is_cache_hit:
+        total_forward = cached_output.forward_evals
+        total_backward = cached_output.backward_evals
+        total_queries = cached_output.queries
+        final_attack_gen_runtime = cached_output.metadata.get("attack_generation_runtime", 0.0)
+    else:
+        final_attack_gen_runtime = attack_gen_time
+
+    if cache is not None and cache_key is not None and not is_cache_hit and len(all_x_adv) > 0:
         combined_x_adv = torch.cat(all_x_adv, dim=0)
-        cache.put(cache_key, AttackOutput(
-            x_adv=combined_x_adv,
-            queries=total_queries,
-            forward_evals=total_forward,
-            backward_evals=total_backward
-        ))
+        cache.put(
+            cache_key,
+            AttackOutput(
+                x_adv=combined_x_adv,
+                queries=total_queries,
+                forward_evals=total_forward,
+                backward_evals=total_backward
+            ),
+            attack_generation_runtime=final_attack_gen_runtime
+        )
 
     clean_corr_cat = torch.cat(all_clean_correct)
     adv_corr_cat = torch.cat(all_adv_correct)
@@ -149,6 +167,9 @@ def evaluate_attack(
         "full_set_robust_accuracy": full_set_robust_acc,
         "conditional_robust_accuracy": cond_robust_acc,
         "asr": asr,
+        "cache_hit": is_cache_hit,
+        "attack_generation_runtime": final_attack_gen_runtime,
+        "cached_evaluation_runtime": elapsed_time if is_cache_hit else 0.0,
         "runtime_seconds": elapsed_time,
         "total_forward_evals": total_forward,
         "total_backward_evals": total_backward,

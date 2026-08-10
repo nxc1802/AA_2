@@ -93,7 +93,8 @@ class MultiGPUScheduler:
 
         # Split indices evenly among GPUs
         shard_size = (total_samples + num_workers - 1) // num_workers
-        manager = mp.Manager()
+        ctx = mp.get_context("spawn")
+        manager = ctx.Manager()
         return_dict = manager.dict()
         processes = []
 
@@ -101,7 +102,7 @@ class MultiGPUScheduler:
             shard_idx = indices[rank * shard_size : (rank + 1) * shard_size]
             if not shard_idx:
                 continue
-            p = mp.Process(
+            p = ctx.Process(
                 target=_worker_attack_shard,
                 args=(
                     gpu_id,

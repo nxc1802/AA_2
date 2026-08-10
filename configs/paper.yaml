@@ -35,7 +35,7 @@ attacks:
   - fgsm
   - bim
   - pgd
-  # - cornersearch
+  - cornersearch
   - pgd0
   - spgd
   - sparse_rs

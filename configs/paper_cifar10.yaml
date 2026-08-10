@@ -45,7 +45,7 @@ dense_references:
 
 # Sparse budgeted attacks — compared at matched K.
 sparse_budgeted:
-  # - cornersearch
+  - cornersearch
   - pgd0
   - spgd
   - sparse_rs
@@ -65,7 +65,7 @@ attacks:
   - fgsm
   - bim
   - pgd
-  # - cornersearch
+  - cornersearch
   - pgd0
   - spgd
   - sparse_rs

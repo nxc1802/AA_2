@@ -11,6 +11,7 @@ from aa.data import get_sample_batch_indices
 from aa.models import get_model
 from aa.attacks import create_attack
 from aa.benchmark import evaluate_attack
+from aa.scheduler import MultiGPUScheduler
 
 
 def parse_args():
@@ -45,6 +46,10 @@ def main():
     print(f"CASA BENCHMARK | Dataset: CIFAR-10 ({args.samples} samples, BS={args.batch_size})")
     print(f"Model: {args.model} | Device: {device} | K values: {args.k_values}")
     print(f"CASA Settings: steps={args.steps}, inner_steps={args.inner_steps}, repair_steps={args.repair_steps}, alpha={args.alpha}, loss_fn={args.loss_fn}, drop_and_repair={not args.no_drop_repair}")
+    gpu_scheduler = MultiGPUScheduler()
+    if gpu_scheduler.is_multi_gpu():
+        print(f"⚡ [MULTI-GPU ACTIVATED] Parallel sharded execution across {gpu_scheduler.num_gpus} CUDA devices!")
+
     print("=" * 80, flush=True)
 
     # 1. Load Data
@@ -86,7 +91,23 @@ def main():
         )
 
         attack_inst = create_attack("casa", model=model, strict=False, **attack_kwargs)
-        eval_res = evaluate_attack(model, attack_inst, loader, device=device)
+
+        if gpu_scheduler.is_multi_gpu():
+            precomputed = gpu_scheduler.run_sharded_attack(
+                model_name=args.model,
+                checkpoint_path=args.checkpoint,
+                expected_sha256=None,
+                attack_name="casa",
+                attack_kwargs=attack_kwargs,
+                seed=args.seed,
+                dataset_name="cifar10",
+                selected_sample_indices=sample_indices,
+                batch_size=args.batch_size
+            )
+            eval_res = evaluate_attack(model, attack_inst, loader, device=device, precomputed_output=precomputed)
+        else:
+            eval_res = evaluate_attack(model, attack_inst, loader, device=device)
+
         elapsed = time.time() - t0
 
         asr = eval_res["asr"]

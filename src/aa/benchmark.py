@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from typing import Dict, Any, List, Optional
 
 from aa.utils import get_best_device, synchronize_device, CountingModel
-from aa.metrics import evaluate_batch, compute_distortion_metrics, BatchMetrics
+from aa.metrics import evaluate_batch, compute_distortion_metrics, BatchMetrics, compute_wilson_score_interval
 
 
 from aa.cache import AttackArtifactCache
@@ -171,6 +171,7 @@ def evaluate_attack(
         "full_set_robust_accuracy": full_set_robust_acc,
         "conditional_robust_accuracy": cond_robust_acc,
         "asr": asr,
+        "asr_ci95": compute_wilson_score_interval(succ_count, clean_correct_count, confidence=0.95),
         "cache_hit": is_cache_hit,
         "attack_generation_runtime": final_attack_gen_runtime,
         "cached_evaluation_runtime": elapsed_time if is_cache_hit else 0.0,
@@ -209,12 +210,14 @@ def derive_minimal_asr_curve(eval_res: Dict[str, Any], k_values: List[int]) -> D
         derived = dict(eval_res)
         derived["success_count"] = k_succ_count
         derived["asr"] = k_asr
+        derived["asr_ci95"] = compute_wilson_score_interval(k_succ_count, clean_correct_count, confidence=0.95)
         derived["robust_accuracy"] = k_robust_acc
         derived["conditional_robust_accuracy"] = k_robust_acc
         derived["k_constraint"] = k
         derived_results[f"k_{k}"] = derived
 
     return derived_results
+
 
 
 derive_progressive_asr_curve = derive_minimal_asr_curve

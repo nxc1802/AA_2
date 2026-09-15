@@ -1,0 +1,34 @@
+# ablation.yaml — Configuration for CASA component ablation experiments
+# As specified in checklist.md: K in [1, 4, 16] across 10 component configurations.
+
+seed: 42
+strict: true
+
+dataset:
+  name: cifar10
+  samples: 1000
+  batch_size: 16
+
+model:
+  name: resnet18
+  checkpoint: resnet18_cifar10_best.pth
+  expected_sha256: 378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172
+  expected_clean_acc: 94.84
+
+benchmark:
+  k_values: [1, 4, 16]
+
+# Baseline CASA full configuration:
+casa_defaults:
+  steps: 20
+  inner_steps: 10
+  repair_steps: 4
+  alpha: 0.25
+  loss_fn: dlr
+  drop_and_repair: true
+  enable_gct: true
+  spatial_nms: true
+  adaptive_batch_swap: true
+  pair_exploration: true
+  pair_search_every: 3
+  candidate_pool_multiplier: 4

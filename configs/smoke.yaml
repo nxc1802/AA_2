@@ -1,4 +1,4 @@
-# smoke.yaml — Fast sanity check config (10 samples, minimal steps)
+# smoke.yaml — Fast sanity check config (20 samples, minimal steps)
 # Use for: CI, quick iteration, debugging
 # NOT suitable for paper results.
 
@@ -6,8 +6,8 @@ seed: 42
 
 dataset:
   name: cifar10
-  samples: 10
-  batch_size: 10
+  samples: 20
+  batch_size: 20
 
 model:
   name: resnet18
@@ -19,7 +19,7 @@ benchmark:
 defense_attacks:
   - pgd0
   - sparse_rs
-  - ours
+  - casa
 
 defense_k: 16
 
@@ -34,7 +34,7 @@ attacks:
   - sparsefool
   - sigma_zero
   - gse
-  - ours
+  - casa
 
 attacks_kwargs:
   pgd:
@@ -73,25 +73,33 @@ attacks_kwargs:
   gse:
     max_evals: 100  # reduced for smoke
 
-  ours:
-    steps: 5  # reduced for smoke
-    inner_steps: 2
-    candidate_pool_size: 4
-    alpha: 0.015686274  # 4/255
-    repair_steps: 2
-    drop_and_repair: true
-    pair_exploration: true
-    pair_search_every: 2
-
   casa:
     steps: 5  # reduced for smoke
     inner_steps: 2
     candidate_pool_size: 4
-    alpha: 0.015686274  # 4/255
+    alpha: 0.25
     repair_steps: 2
+    loss_fn: dlr
     drop_and_repair: true
     pair_exploration: true
     pair_search_every: 2
+    enable_gct: true
+    spatial_nms: true
+    adaptive_batch_swap: true
+
+  ours:
+    steps: 5  # reduced for smoke
+    inner_steps: 2
+    candidate_pool_size: 4
+    alpha: 0.25
+    repair_steps: 2
+    loss_fn: dlr
+    drop_and_repair: true
+    pair_exploration: true
+    pair_search_every: 2
+    enable_gct: true
+    spatial_nms: true
+    adaptive_batch_swap: true
 
   ours_v1:
     steps: 5  # reduced for smoke
@@ -102,3 +110,4 @@ attacks_kwargs:
     interaction_mode: cpa
     pruning: true
     pruning_max_passes: 2  # reduced for smoke
+

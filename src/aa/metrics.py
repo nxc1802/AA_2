@@ -209,3 +209,49 @@ def compute_distortion_metrics(
             metrics[key] = None
 
     return metrics
+
+
+import math
+
+
+def compute_wilson_score_interval(successes: int, total: int, confidence: float = 0.95) -> Dict[str, float]:
+    """
+    Computes Wilson score confidence interval for binomial proportion (ASR).
+    Essential for statistical significance claims in adversarial robustness papers.
+    """
+    if total <= 0:
+        return {"p": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "margin": 0.0}
+
+    # For 95% confidence, z = 1.95996
+    z_map = {0.90: 1.64485, 0.95: 1.95996, 0.99: 2.57583}
+    z = z_map.get(confidence, 1.95996)
+
+    p_hat = successes / total
+    z2 = z * z
+    n = total
+
+    denominator = 1.0 + z2 / n
+    center = (p_hat + z2 / (2.0 * n)) / denominator
+    spread = z * math.sqrt((p_hat * (1.0 - p_hat) / n) + (z2 / (4.0 * (n ** 2)))) / denominator
+
+    ci_lower = max(0.0, center - spread) * 100.0
+    ci_upper = min(1.0, center + spread) * 100.0
+    p_pct = p_hat * 100.0
+
+    return {
+        "p": round(p_pct, 4),
+        "ci_lower": round(ci_lower, 4),
+        "ci_upper": round(ci_upper, 4),
+        "margin": round((ci_upper - ci_lower) / 2.0, 4)
+    }
+
+
+def compute_relative_and_absolute_gain(asr_proposed: float, asr_baseline: float) -> Dict[str, float]:
+    """Computes absolute and relative improvement between proposed attack and baseline."""
+    abs_gain = asr_proposed - asr_baseline
+    rel_gain = (abs_gain / asr_baseline * 100.0) if asr_baseline > 1e-6 else float("inf")
+    return {
+        "abs_gain": round(abs_gain, 4),
+        "rel_gain": round(rel_gain, 2)
+    }
+

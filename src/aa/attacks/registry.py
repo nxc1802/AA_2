@@ -14,6 +14,7 @@ from aa.attacks.external.sparse_rs import SparseRS
 from aa.attacks.external.sparsefool import SparseFool
 from aa.attacks.external.sigma_zero import SigmaZero
 from aa.attacks.external.gse import GSE
+from aa.attacks.external.saa import SparseAutoAttack
 
 
 @dataclass
@@ -34,11 +35,16 @@ ATTACK_REGISTRY: Dict[str, AttackSpec] = {
     "sparsefool": AttackSpec(name="SparseFool", factory=SparseFool, mode="minimal"),
     "sigma_zero": AttackSpec(name="Sigma-Zero", factory=SigmaZero, mode="minimal"),
     "gse": AttackSpec(name="GSE", factory=GSE, mode="minimal"),
-    "ours": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
+    "saa": AttackSpec(name="Sparse-AutoAttack", factory=SparseAutoAttack, mode="budget"),
+    "sparse_autoattack": AttackSpec(name="Sparse-AutoAttack", factory=SparseAutoAttack, mode="budget"),
     "casa": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
+    "casa_v2": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
+    "casa_v1": AttackSpec(name="CASA-v1", factory=SparseFeatureAttack, mode="budget"),
+    "ours": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
     "ours_v2": AttackSpec(name="CASA", factory=CoalitionSparseAttack, mode="budget"),
     "ours_v1": AttackSpec(name="Ours-v1", factory=SparseFeatureAttack, mode="budget"),
 }
+
 
 
 def get_attack_spec(name: str) -> AttackSpec:

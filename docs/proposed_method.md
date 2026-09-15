@@ -141,3 +141,18 @@ class CoalitionSparseAttack:
 ### Complexity Analysis
 - **Time Complexity:** For batch size $B$, each outer step requires 1 forward-backward pass for coalition gradient $g_{\mathcal{S}}$, followed by inner repair passes. Total forward evaluations per image average **$22 - 60$**, compared to **$10,000$** for Sparse-RS and **$68,943$** for CornerSearch.
 - **Memory Complexity:** $O(B \cdot C \cdot H \cdot W)$, matching standard PGD, with fully vectorized PyTorch operations on CUDA/MPS.
+
+---
+
+## 4. Component Ablation Study
+
+The following figure illustrates the progression across all 5 iterative upgrades and the incremental contribution of each module on 1,000 CIFAR-10 test samples with ResNet-18:
+
+![CASA SOTA Component Ablation Study](assets/casa_ablation_study.png)
+
+### Key Empirical Takeaways:
+1. **Box-Extremal Warm-Start & Standard Step Size ($\alpha = 0.25$):** Eliminating the flawed $L_\infty$ assumption yields the foundational leap ($+17.61\%$ at $K=1$, $+48.88\%$ at $K=4$).
+2. **DLR Loss:** Shift/scale invariance maintains non-saturating gradients, adding $+1.38\%$ to $+3.84\%$.
+3. **Dynamic Pool Refresh & Tabu Mask:** Prevents stagnation and cycling, providing $+2.35\%$ to $+3.95\%$.
+4. **Gradient-Guided Corner Traversal (GCT) & Spatial NMS:** Solves the ultra-sparse landscape ($K \le 2$), boosting $K=1$ by $+1.60\%$ to achieve $23.37\%$, while Spatial NMS enables $100.00\%$ evasion at $K=64$.
+5. **Adaptive Batch Swap (2-out / 2-in) & Drop-and-Repair:** Breaks synergy traps ($+1.71\%$ at $K=4$, $+0.96\%$ at $K=8$), while compressing active perturbed pixels by $30\% - 50\%$.

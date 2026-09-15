@@ -95,7 +95,26 @@ $$\text{CRA}@K = 100\% - \text{ASR}@K$$
 | **8** | 10.14% | 73.85% | 76.73% | 80.58% | 80.47% | **81.43%** | **+71.29%** |
 | **16** | 20.81% | 88.69% | 91.04% | 92.74% | 93.38% | **94.02%** | **+73.21%** |
 | **32** | 36.07% | 97.87% | 98.40% | 98.51% | 99.15% | **99.47%** | **+63.40%** |
-| **64** | 61.15% | 99.89% | 99.89% | 99.89% | 100.00% | **100.00%** | **+38.85%** |
+
+### Figure 1: Component Ablation Study & Incremental Decomposition
+![CASA SOTA Component Ablation Study](assets/casa_ablation_study.png)
+
+#### Component Breakdown Analysis:
+1. **+ Box-Extremal Initialization & Standard Step Size ($\alpha = 0.25$) [Iteration 1]:**
+   - Eliminates the flawed $L_\infty$ assumption ($\alpha=4/255$), allowing pixels to traverse the full color range $[0, 1]$.
+   - Yields the single largest baseline leap: $+17.61\%$ at $K=1$, $+48.88\%$ at $K=4$, and $+67.88\%$ at $K=16$.
+2. **+ DLR Loss & Attack Margin Formulation [Iteration 2]:**
+   - Shift- and scale-invariant objective prevents vanishing gradients caused by exploding logit variance.
+   - Adds $+1.38\%$ at $K=1$, $+3.84\%$ at $K=4$, and $+2.88\%$ at $K=8$.
+3. **+ Dynamic Candidate Refresh & Anti-Cycling Tabu Mask [Iteration 3]:**
+   - Captures high-order non-linear feature interactions that emerge only after intermediate perturbation, while Tabu search prevents cyclic oscillation.
+   - Adds $+2.35\%$ at $K=1$, $+3.95\%$ at $K=4$, and $+3.85\%$ at $K=8$.
+4. **+ Gradient-Guided Corner Traversal (GCT) & Spatial NMS [Iteration 4]:**
+   - GCT directly evaluates the 8 vertices of the RGB color cube on top Box-Aware gradient locations, bypassing continuous local minima at $K \le 2$ ($+1.60\%$ at $K=1$).
+   - Spatial NMS ($r=1$) disperses initial coalition seeds across separate receptive fields, achieving $100.00\%$ evasion at $K=64$.
+5. **+ Adaptive Batch Swap (2-out / 2-in) & Drop-and-Repair [Iteration 5 SOTA]:**
+   - Breaks the "synergy trap" where candidate pairs only work jointly ($+1.71\%$ at $K=4$, $+0.96\%$ at $K=8$, $+0.64\%$ at $K=16$).
+   - Drop-and-Repair prunes non-essential pixels, compressing achieved $L_0$ by $30\% - 50\%$ without sacrificing attack efficacy.
 
 ---
 

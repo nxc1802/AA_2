@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from typing import List, Dict, Any, Optional, Callable
 import torch.multiprocessing as mp
-from aa.utils import set_seed
+from aa.utils import set_seed, suppress_third_party_warnings
 from aa.models import get_model
 from aa.attacks import create_attack
 from aa.attacks.base import AttackOutput
@@ -27,6 +27,7 @@ def _worker_attack_shard(
     defense_spec: Optional[dict] = None
 ):
     """Worker process targeting specific GPU to evaluate an attack shard with primitive serializable args."""
+    suppress_third_party_warnings()
     try:
         if torch.cuda.is_available() and gpu_id < torch.cuda.device_count():
             device = torch.device(f"cuda:{gpu_id}")

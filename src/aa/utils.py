@@ -135,3 +135,33 @@ def get_git_reproducibility_info(repo_dir: str = None) -> dict:
         "device_name": get_device_name()
     }
 
+
+def suppress_third_party_warnings() -> None:
+    """Silences noisy third-party warnings from Hugging Face Hub, datasets, and torchvision."""
+    import warnings
+    import logging
+    warnings.filterwarnings("ignore", message=".*unauthenticated requests to the HF Hub.*")
+    warnings.filterwarnings("ignore", message=".*TypedStorage is deprecated.*")
+    warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
+    warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
+    warnings.filterwarnings("ignore", category=UserWarning, module="torchvision")
+    os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+    os.environ["HF_HUB_VERBOSITY"] = "error"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    for logger_name in ("huggingface_hub", "datasets", "transformers", "urllib3"):
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    try:
+        from huggingface_hub.utils import logging as hf_logging
+        hf_logging.set_verbosity_error()
+    except Exception:
+        pass
+    try:
+        from datasets.utils import logging as ds_logging
+        ds_logging.set_verbosity_error()
+    except Exception:
+        pass
+
+
+# Automatically suppress warnings at module import
+suppress_third_party_warnings()
+

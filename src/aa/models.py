@@ -132,7 +132,14 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
             token=token
         )
         if hf_path and os.path.isfile(hf_path):
-            return hf_path
+            local_dest = os.path.join(workspace_root, "result", "saved_models", filename)
+            os.makedirs(os.path.dirname(local_dest), exist_ok=True)
+            import shutil
+            try:
+                shutil.copy2(hf_path, local_dest)
+                return os.path.abspath(local_dest)
+            except Exception:
+                return hf_path
     except Exception:
         pass
 

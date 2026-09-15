@@ -91,7 +91,9 @@ def setup_environment():
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"\nCheckpoint not found locally. Downloading from Hugging Face Hub (Cuong2004/AA)...", flush=True)
         from aa.models import find_existing_checkpoint
-        find_existing_checkpoint(CHECKPOINT_PATH)
+        resolved_ckpt = find_existing_checkpoint(CHECKPOINT_PATH)
+        if resolved_ckpt and os.path.isfile(resolved_ckpt) and resolved_ckpt != CHECKPOINT_PATH:
+            shutil.copy2(resolved_ckpt, CHECKPOINT_PATH)
 
     with open(CHECKPOINT_PATH, "rb") as f:
         actual_sha = hashlib.sha256(f.read()).hexdigest()

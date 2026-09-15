@@ -2,6 +2,9 @@ import os
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 import torchvision.transforms as transforms
+from aa.utils import suppress_third_party_warnings
+suppress_third_party_warnings()
+
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Optional

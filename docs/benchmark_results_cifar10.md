@@ -2,6 +2,9 @@
 
 This document presents the official benchmark results for adversarial attacks evaluated under the strict spatial ($L_0$) threat model on CIFAR-10 using ResNet-18.
 
+> [!NOTE]
+> For the complete comprehensive analysis of the full **10,000-sample CIFAR-10 test set** generated on Kaggle GPU, please see [docs/paper_artifacts_analysis.md](file:///Volumes/WorkSpace/Project/AA/docs/paper_artifacts_analysis.md).
+
 ---
 
 ## 1. Experimental Environment & Verification Metadata

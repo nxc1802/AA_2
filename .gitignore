@@ -25,3 +25,5 @@ env/
 
 # Output directories
 result/
+paper_artifacts/
+*.tar.gz

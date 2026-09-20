@@ -15,8 +15,9 @@ Toàn bộ thư mục `paper_artifacts` là kết quả trích xuất từ phiê
 | :--- | :--- | :--- |
 | **Phần cứng GPU** | **2x NVIDIA Tesla T4 (16GB VRAM x 2)** | Chạy song song qua `MultiGPUScheduler` (GPU 0 & GPU 1) |
 | **Hệ điều hành / CUDA** | Linux 6.12 / CUDA 12.8 / PyTorch 2.10.0+cu128 | Vectorized cuDNN Benchmark enabled |
-| **Git Commit SHA** | `1fb2521843f0ba475281cb17e16dc57a251ec84a` | Trạng thái Clean (0 dirty files) |
-| **Dataset Test Split** | CIFAR-10 Test Split (Đủ 10,000 mẫu) | Sample indices hash: `1899ec16689e...` |
+| **Benchmark Execution Git SHA** | `1fb2521843f0ba475281cb17e16dc57a251ec84a` | Commit chính thức thực thi tính toán trên Kaggle GPU (Clean) |
+| **Packaging & Reporting Git SHA**| `cedb219` / Current | Commit tổng hợp tài liệu, đồ thị và đóng gói artifacts |
+| **Dataset Test Split** | CIFAR-10 Test Split (Đủ 10,000 mẫu) | Sample indices hash: `1899ec16689e0477ac35484f5cacefc22e284a929c103400ef4f1638739aba08` |
 | **Model Checkpoint** | `result/saved_models/resnet18_cifar10_best.pth` | Chuẩn ResNet-18 thích ứng CIFAR (3x3 conv1, stride 1) |
 | **Mã SHA256 Model** | `378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172` | Đạt kiểm định mã băm độc lập (Checksum gate passed) |
 | **Độ chính xác sạch (Clean Acc)** | **94.84%** (9,484 / 10,000 mẫu dự đoán đúng) | Khớp hoàn hảo với công bố của các nghiên cứu SOTA |
@@ -26,71 +27,78 @@ Toàn bộ thư mục `paper_artifacts` là kết quả trích xuất từ phiê
 
 ## 2. Kết Quả Benchmark Trực Diện Trên Toàn Bộ 10,000 Mẫu CIFAR-10
 
-Đây là kết quả thực nghiệm quan trọng nhất của bài báo, được trích xuất trực tiếp từ `casa_10000_results.json` và `baselines_spgd_sigmazero_10k.json`. Cả 3 phương pháp SOTA nhóm White-box đều được đánh giá đồng thời trên **toàn bộ 10,000 mẫu ảnh kiểm thử** (thay vì tập con 1,000 mẫu).
+Đây là kết quả thực nghiệm quan trọng nhất của bài báo, được trích xuất trực tiếp từ `casa_10000_results.json` và `baselines_spgd_sigmazero_10k.json`. Cả 3 phương pháp nhóm White-box đều được đánh giá đồng thời trên **toàn bộ 10,000 mẫu ảnh kiểm thử** (thay vì tập con 1,000 mẫu).
 
 ### Bảng 2: So Sánh Tỷ Lệ Tấn Công Thành Công Có Điều Kiện ($ASR@K$) Trên 10,000 Ảnh (%)
 $$\text{ASR}@K = \frac{\sum_{i=1}^N \mathbb{I}\left(f(x_i + \delta_i) \neq y_i \land f(x_i) = y_i \land \|\delta_i\|_{0, \text{spatial}} \le K\right)}{\sum_{i=1}^N \mathbb{I}\left(f(x_i) = y_i\right)} \times 100\%$$
 
-| Ngân Sách ($K$) | Sigma-Zero (NeurIPS'24) | SPGD (ICML'19 SOTA) | **CASA (Ours SOTA)** | Khoảng Tin Cậy 95% (CASA) | Mức Vượt Trội vs SPGD | Mức Vượt Trội vs Sigma-Zero |
+> *Quy ước in đậm: Chỉ in đậm giá trị tốt nhất ở từng cột tương ứng với phương pháp thực sự vượt trội.*
+
+| Ngân Sách ($K$) | Sigma-Zero (NeurIPS'24) | SPGD (ICML'19 SOTA) | **CASA (Proposed)** | Khoảng Tin Cậy 95% (CASA) | Mức Chênh Lệch vs SPGD | Mức Chênh Lệch vs Sigma-Zero |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **$K = 1$** | 11.16% | 13.45% | **19.78%** | $[18.99\%, 20.59\%]$ | **+6.33%** | **+8.62%** |
 | **$K = 2$** | 22.54% | 30.07% | **36.47%** | $[35.50\%, 37.44\%]$ | **+6.40%** | **+13.93%** |
 | **$K = 4$** | 42.55% | 59.51% | **62.00%** | $[61.02\%, 62.98\%]$ | **+2.49%** | **+19.45%** |
-| **$K = 8$** | 71.06% | **87.30%** | **82.96%** | $[82.20\%, 83.72\%]$ | -4.34% | **+11.90%** |
-| **$K = 16$** | 95.04% | **98.81%** | **94.77%** | $[94.32\%, 95.22\%]$ | -4.04% | -0.27% |
-| **$K = 32$** | 99.94% | **100.00%** | **99.64%** | $[99.52\%, 99.76\%]$ | -0.36% | -0.30% |
-| **$K = 64$** | **100.00%** | **100.00%** | **99.99%** | $[99.97\%, 100.00\%]$ | -0.01% | -0.01% |
+| **$K = 8$** | 71.06% | **87.30%** | 82.96% | $[82.20\%, 83.72\%]$ | -4.34% | **+11.90%** |
+| **$K = 16$** | 95.04% | **98.81%** | 94.77% | $[94.32\%, 95.22\%]$ | -4.04% | -0.27% |
+| **$K = 32$** | 99.94% | **100.00%** | 99.64% | $[99.52\%, 99.76\%]$ | -0.36% | -0.30% |
+| **$K = 64$** | **100.00%** | **100.00%** | 99.99% | $[99.97\%, 100.00\%]$ | -0.01% | -0.01% |
 
 ---
 
-### Bảng 3: So Sánh Độ Chính Xác Bền Vững Có Điều Kiện ($CRA@K$) Trên 10,000 Ảnh (%)
-$$\text{CRA}@K = 100\% - \text{ASR}@K$$
-*(Giá trị càng THẤP thể hiện đòn tấn công càng MẠNH, bẻ gãy khả năng phòng thủ của mạng)*
+### Bảng 3: So Sánh Robust Accuracy: Full-Set ($RA@K$) & Conditional ($CRA@K$) Trên 10,000 Ảnh (%)
 
-| Ngân Sách ($K$) | Clean Baseline | Sigma-Zero (NeurIPS'24) | SPGD (ICML'19 SOTA) | **CASA (Ours SOTA)** |
-| :---: | :---: | :---: | :---: | :---: |
-| **$K = 0$ (Clean)** | 94.84% | 94.84% | 94.84% | **94.84%** |
-| **$K = 1$** | 94.84% | 88.84% | 86.55% | **80.22%** (Bẻ gãy 1,876 ảnh) |
-| **$K = 2$** | 94.84% | 77.46% | 69.93% | **63.53%** (Bẻ gãy 3,459 ảnh) |
-| **$K = 4$** | 94.84% | 57.45% | 40.49% | **38.00%** (Bẻ gãy 5,880 ảnh) |
-| **$K = 8$** | 94.84% | 28.94% | **12.70%** | **17.04%** (Bẻ gãy 7,868 ảnh) |
-| **$K = 16$** | 94.84% | 4.96% | **1.19%** | **5.23%** (Bẻ gãy 8,988 ảnh) |
-| **$K = 32$** | 94.84% | 0.06% | **0.00%** | **0.36%** (Bẻ gãy 9,450 ảnh) |
-| **$K = 64$** | 94.84% | 0.00% | **0.00%** | **0.01%** (Bẻ gãy 9,483 ảnh) |
+* **Full-Set Robust Accuracy ($RA@K$):** Tỷ lệ mẫu dự đoán đúng trên toàn bộ 10,000 mẫu ($\text{RA}@0 = \text{Clean Acc} = 94.84\%$, $\text{RA}@K = \text{Clean Acc} \times (1 - \text{ASR}@K/100)$).
+* **Conditional Robust Accuracy ($CRA@K$):** Tỷ lệ mẫu giữ được nhãn đúng trên tập con các mẫu sạch đã đúng ($\text{CRA}@0 = 100.00\%$, $\text{CRA}@K = 100\% - \text{ASR}@K$).
 
----
-
-### 💡 Nhận Xét & Phân Tích Khoa Học:
-1. **Thống Trị Tuyệt Đối Ở Ngân Sách Thấp ($K \le 4$):**
-   - Ở các bài toán tấn công thưa thớt khắt khe ($K=1, 2, 4$), **CASA vượt trội hoàn toàn so với SPGD và Sigma-Zero**. 
-   - Tại $K=1$, CASA đạt **19.78%**, bỏ xa SPGD (+6.33%) và gần gấp đôi Sigma-Zero (+8.62%). Điều này chứng minh rằng cơ chế **Gradient-Guided Corner Traversal (GCT)** và **Directional Headroom Gain** đã khắc phục triệt để điểm yếu của SPGD (vốn bị kẹt tại các đạo hàm cục bộ gần 0 khi chỉ có 1-2 pixel được thay đổi).
-2. **Hội Tụ Ở Ngân Sách Cao ($K \ge 16$):**
-   - Khi ngân sách pixel $K \ge 16$, không gian nhiễu loạn mở rộng, cả 3 thuật toán đều nhanh chóng đẩy ASR lên trên 95% và tiệm cận 100% tại $K=64$.
-   - SPGD nhỉnh hơn nhẹ ở $K=8$ và $K=16$ do chạy tới 100 bước PGD liên tục, trong khi CASA giới hạn ở 20 outer steps để tối ưu hóa thời gian tính toán (nhanh hơn gấp nhiều lần).
-
----
-
-## 3. Độ Phức Tạp Tính Toán & Hiệu Năng Thực Thi (Computational Efficiency)
-
-Trích xuất từ các trường `total_forward_evals`, `total_backward_evals`, và `runtime_seconds` trong `casa_10000_results.json`:
-
-### Bảng 4: Chi Tiết Chi Phí Tính Toán Của CASA Trên 10,000 Ảnh Theo Budget $K$
-| Ngân Sách ($K$) | Số Ảnh Bị Lừa | Forward Evals (Tổng) | Backward Evals (Tổng) | Queries TB / Ảnh | Thời Gian Tạo Nhiễu (s) | Tốc Độ (Ảnh/s) |
+| Ngân Sách ($K$) | Sigma-Zero (Full-Set $RA$) | SPGD (Full-Set $RA$) | **CASA (Full-Set $RA$)** | Sigma-Zero ($CRA$) | SPGD ($CRA$) | **CASA ($CRA$)** |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **$K = 1$** | 1,876 | 223,073 | 75,746 | **22.3** | 935.2s | 10.7 img/s |
-| **$K = 2$** | 3,459 | 249,051 | 99,353 | **24.9** | 1,100.0s | 9.1 img/s |
-| **$K = 4$** | 5,880 | 349,944 | 156,418 | **35.0** | 1,593.9s | 6.3 img/s |
-| **$K = 8$** | 7,868 | 348,322 | 155,777 | **34.8** | 1,590.5s | 6.3 img/s |
-| **$K = 16$** | 8,988 | 284,326 | 127,261 | **28.4** | 1,309.4s | 7.6 img/s |
-| **$K = 32$** | 9,450 | 96,889 | 43,352 | **9.7** | 484.7s | 20.6 img/s |
-| **$K = 64$** | 9,483 | 24,977 | 11,704 | **2.5** | 150.7s | **66.4 img/s** |
+| **$K = 0$ (Clean)** | 94.84% | 94.84% | **94.84%** | 100.00% | 100.00% | **100.00%** |
+| **$K = 1$** | 84.26% | 82.08% | **76.08%** | 88.84% | 86.55% | **80.22%** |
+| **$K = 2$** | 73.46% | 66.32% | **60.25%** | 77.46% | 69.93% | **63.53%** |
+| **$K = 4$** | 54.49% | 38.40% | **36.04%** | 57.45% | 40.49% | **38.00%** |
+| **$K = 8$** | 27.44% | **12.04%** | 16.16% | 28.94% | **12.70%** | 17.04% |
+| **$K = 16$** | 4.70% | **1.13%** | 4.96% | 4.96% | **1.19%** | 5.23% |
+| **$K = 32$** | 0.06% | **0.00%** | 0.34% | 0.06% | **0.00%** | 0.36% |
+| **$K = 64$** | **0.00%** | **0.00%** | 0.01% | **0.00%** | **0.00%** | 0.01% |
 
-### 🚀 Hiện Tượng Early Stopping Tự Thích Ứng Cực Kỳ Đắt Giá:
-- Ở ngân sách nhỏ ($K=1 \to 4$), CASA nỗ lực tìm kiếm tối đa qua các bước inner/repair steps để bẻ gãy các mẫu khó (trung bình 22 – 35 queries/ảnh).
-- Khi ngân sách tăng ($K=32, 64$), hầu hết các ảnh đều bị lật nhãn ngay tại bước đầu tiên (1–2 bước inner optimization). Cơ chế Early Stopping ngắt tính toán ngay lập tức:
-  - Tại $K=64$, số lượng forward evals giảm xuống chỉ còn **2.5 queries/ảnh**!
-  - Thời gian xử lý toàn bộ 10,000 ảnh rơi từ 1,593s xuống chỉ còn **150.7s** (tốc độ đạt **66.4 ảnh/giây** trên 2x Tesla T4).
-  - So sánh với các phương pháp Black-box như **CornerSearch (68,943 queries/ảnh)** hay **Sparse-RS (10,000 queries/ảnh)**, CASA tiết kiệm tài nguyên tính toán từ **280x đến 4,000x**!
+---
+
+### 💡 Nhận Xét & Định Vị Khoa Học Chuẩn Mực (Calibrated Scientific Claims):
+1. **Thiết Lập Chuẩn SOTA Mới Ở Vùng Ngân Sách Siêu Hẹp ($K \le 4$):**
+   - CASA thiết lập chuẩn SOTA mới cho các đòn tấn công thưa thớt White-box tại $K \in \{1, 2, 4\}$.
+   - Tại $K=1$, CASA đạt **19.78%**, vượt trội SPGD (+6.33%) và gần gấp đôi Sigma-Zero (+8.62%). Điều này chứng minh cơ chế **Gradient-Guided Corner Traversal (GCT)** và **Directional Headroom Gain** giải quyết triệt để sự phân tán gradient ở không gian 1-pixel.
+2. **Cạnh Tranh & Tương Đương Ở Ngân Sách Lớn Hơn ($K \ge 8$):**
+   - SPGD nhỉnh hơn nhẹ tại $K=8$ và $K=16$ do chạy 100 bước PGD liên tục trên toàn bộ ảnh. CASA giới hạn ở 20 outer steps để ưu tiên tốc độ và tính ứng dụng trong huấn luyện đối nghịch thưa thớt.
+   - Khi $K \ge 32$, cả 3 phương pháp đều đạt tỷ lệ bẻ gãy gần như tuyệt đối ($\ge 99.6\%$).
+
+---
+
+## 3. Độ Phức Tạp Tính Toán: Phân Biệt Query vs. Forward/Backward Evaluations
+
+Để đảm bảo tính nghiêm ngặt khoa học, cần phân biệt rạch ròi giữa chi phí của tấn công **Hộp đen (Black-box)** và **Hộp trắng (White-box)**:
+- **Black-box Query:** Số lần gọi hàm dự đoán $f(x)$ không có đạo hàm (Zero-order oracle call).
+- **White-box Forward Pass:** Số lần tính lan truyền xuôi qua mạng $f(x)$ (theo batch hoặc mẫu).
+- **White-box Backward Pass:** Số lần tính lan truyền ngược $\nabla_x \mathcal{L}$ (Vector-Jacobian Product). Về mặt độ phức tạp tính toán FLOPs:
+  $$\text{FLOP-Equivalent Cost} \approx \text{Forward Passes} + 2 \times \text{Backward Passes}$$
+
+### Bảng 4: Chi Tiết Chi Phí Tính Toán Của CASA Trên 10,000 Ảnh (2x Tesla T4)
+| Ngân Sách ($K$) | Số Ảnh Bị Lừa | Forward Passes (Batch Invocations) | Backward Passes (Gradients) | Chi Phí Tương Đương ($F + 2B$) | Thời Gian Tạo Nhiễu (s) | Tốc Độ Thực Tế |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **$K = 1$** | 1,876 | 223,073 | 75,746 | 374,565 | 935.2s | 10.7 img/s |
+| **$K = 2$** | 3,459 | 249,051 | 99,353 | 447,757 | 1,100.0s | 9.1 img/s |
+| **$K = 4$** | 5,880 | 349,944 | 156,418 | 662,780 | 1,593.9s | 6.3 img/s |
+| **$K = 8$** | 7,868 | 348,322 | 155,777 | 659,876 | 1,590.5s | 6.3 img/s |
+| **$K = 16$** | 8,988 | 284,326 | 127,261 | 538,848 | 1,309.4s | 7.6 img/s |
+| **$K = 32$** | 9,450 | 96,889 | 43,352 | 183,593 | 484.7s | 20.6 img/s |
+| **$K = 64$** | 9,483 | 24,977 | 11,704 | 48,385 | 150.7s | **66.4 img/s** |
+
+### 🚀 Hiện Tượng Early Stopping Tự Thích Ứng:
+- Ở ngân sách nhỏ ($K=1 \to 4$), CASA tìm kiếm tối đa qua các bước sửa chữa repair steps để bẻ gãy các mẫu khó.
+- Khi ngân sách tăng ($K=32, 64$), hầu hết các ảnh đều bị lật nhãn ngay tại 1–2 bước đầu tiên. Cơ chế Early Stopping ngắt tính toán ngay lập tức:
+  - Tại $K=64$, tổng số backward passes chỉ còn 11,704 cho 10,000 ảnh (~1.17 backward/ảnh).
+  - Thời gian xử lý toàn bộ 10,000 ảnh chỉ còn **150.7s** (tốc độ đạt **66.4 ảnh/giây** trên 2x Tesla T4).
+  - So sánh với các phương pháp Black-box như **CornerSearch (68,943 queries/ảnh)** hay **Sparse-RS (10,000 queries/ảnh)**, CASA hoàn thành nhanh hơn gấp **20x đến 100x** mà không bị nghẽn CPU.
 
 ---
 

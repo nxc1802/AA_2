@@ -659,5 +659,11 @@ class CoalitionSparseAttack(Attack):
                 "steps": self.steps,
                 "loss_fn": self.loss_fn,
                 "candidate_pool_size": M,
+                "batch_size": B,
+                "model_forward_calls": forward_evals,
+                "sample_forward_evals": forward_evals * B,
+                "model_backward_calls": backward_evals,
+                "sample_backward_evals": backward_evals * B,
+                "flop_equivalent_evals": (forward_evals + 2 * backward_evals) * B,
             }
         )

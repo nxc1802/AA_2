@@ -35,56 +35,55 @@ This document presents the official benchmark results for adversarial attacks ev
 ---
 
 ### Table 2: Attack Success Rate ($ASR@K$) Comparison across Budgets (%)
-
 $$\text{ASR}@K = \frac{\sum_{i=1}^N \mathbb{I}\left(f(x_i + \delta_i) \neq y_i \land f(x_i) = y_i \land \|\delta_i\|_{0, \text{spatial}} \le K\right)}{\sum_{i=1}^N \mathbb{I}\left(f(x_i) = y_i\right)} \times 100\%$$
 
-| Attack | Paradigm | K=1 | K=2 | K=4 | K=8 | K=16 | K=32 | K=64 |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **CornerSearch** | Blackbox Greedy | 30.95% | 61.15% | 77.37% | 85.59% | 90.29% | 92.53% | 92.64% |
-| **Sparse-RS** | Blackbox RS | 29.88% | 58.48% | 84.31% | 97.55% | 100.00% | 100.00% | 100.00% |
-| **SPGD** | Whitebox SOTA | 14.51% | 32.66% | 60.09% | 86.23% | 98.08% | 100.00% | 100.00% |
-| **Sigma-Zero** | Whitebox Minimal | 12.91% | 25.93% | 44.72% | 72.25% | 94.88% | 100.00% | 100.00% |
-| **SparseFool** | Whitebox Minimal | 3.20% | 6.08% | 13.87% | 27.43% | 51.33% | 72.25% | 87.62% |
-| **PGD0** | Whitebox Budget | 2.88% | 4.06% | 8.22% | 15.90% | 27.85% | 42.48% | 58.38% |
-| **GSE** | Whitebox Minimal | 1.81% | 2.67% | 4.16% | 6.40% | 8.75% | 46.74% | 62.11% |
-| **Ours V1 (SFA - Old)**| Whitebox Heuristic | 0.43% | 1.92% | 5.34% | 10.14% | 20.81% | 36.07% | 61.15% |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **23.37%** | **39.70%** | **64.14%** | **81.43%** | **94.02%** | **99.47%** | **100.00%** |
+> *Note: Whitebox benchmarks (CASA, SPGD, Sigma-Zero) are evaluated on the **full 10,000 test set**. Blackbox baselines (CornerSearch, Sparse-RS) are evaluated on the standardized 1,000-sample test split due to combinatorial query complexity ($O(N)$). Bold indicates highest ASR per budget within the whitebox family.*
+
+| Attack | Paradigm | Samples | K=1 | K=2 | K=4 | K=8 | K=16 | K=32 | K=64 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **CornerSearch** | Blackbox Greedy | 1,000 | 30.95% | 61.15% | 77.37% | 85.59% | 90.29% | 92.53% | 92.64% |
+| **Sparse-RS** | Blackbox RS | 1,000 | 29.88% | 58.48% | 84.31% | 97.55% | 100.00% | 100.00% | 100.00% |
+| **SparseFool** | Whitebox Minimal | 1,000 | 3.20% | 6.08% | 13.87% | 27.43% | 51.33% | 72.25% | 87.62% |
+| **PGD0** | Whitebox Budget | 1,000 | 2.88% | 4.06% | 8.22% | 15.90% | 27.85% | 42.48% | 58.38% |
+| **GSE** | Whitebox Minimal | 1,000 | 1.81% | 2.67% | 4.16% | 6.40% | 8.75% | 46.74% | 62.11% |
+| **Sigma-Zero** | Whitebox Minimal | 10,000 | 11.16% | 22.54% | 42.55% | 71.06% | 95.04% | 99.94% | 100.00% |
+| **SPGD** | Whitebox SOTA | 10,000 | 13.45% | 30.07% | 59.51% | **87.30%** | **98.81%** | **100.00%** | **100.00%** |
+| **CASA (Proposed)** | **Whitebox Coalition** | **10,000** | **19.78%** | **36.47%** | **62.00%** | 82.96% | 94.77% | 99.64% | 99.99% |
 
 ---
 
-### Table 3: Conditional Robust Accuracy ($CRA@K$) Comparison (%)
+### Table 3: Robust Accuracy Comparison: Full-Set ($RA@K$) & Conditional ($CRA@K$) (%)
 
-$$\text{CRA}@K = 100\% - \text{ASR}@K$$
+* **Full-Set Robust Accuracy ($RA@K$):** $\text{RA}@K = \text{Clean Acc} \times (1 - \text{ASR}@K/100)$. At $K=0$ (clean), $\text{RA}@0 = 94.84\%$.
+* **Conditional Robust Accuracy ($CRA@K$):** $\text{CRA}@K = 100\% - \text{ASR}@K$. At $K=0$ (clean), $\text{CRA}@0 = 100.00\%$.
 
-| Attack | Paradigm | K=1 | K=2 | K=4 | K=8 | K=16 | K=32 | K=64 |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **CornerSearch** | Blackbox Greedy | 69.05% | 38.85% | 22.63% | 14.41% | 9.71% | 7.47% | 7.36% |
-| **Sparse-RS** | Blackbox RS | 70.12% | 41.52% | 15.69% | 2.45% | 0.00% | 0.00% | 0.00% |
-| **SPGD** | Whitebox SOTA | 85.49% | 67.34% | 39.91% | 13.77% | 1.92% | 0.00% | 0.00% |
-| **Sigma-Zero** | Whitebox Minimal | 87.09% | 74.07% | 55.28% | 27.75% | 5.12% | 0.00% | 0.00% |
-| **SparseFool** | Whitebox Minimal | 96.80% | 93.92% | 86.13% | 72.57% | 48.67% | 27.75% | 12.38% |
-| **PGD0** | Whitebox Budget | 97.12% | 95.94% | 91.78% | 84.10% | 72.15% | 57.52% | 41.62% |
-| **GSE** | Whitebox Minimal | 98.19% | 97.33% | 95.84% | 93.60% | 91.25% | 53.26% | 37.89% |
-| **Ours V1 (SFA - Old)**| Whitebox Heuristic | 99.57% | 98.08% | 94.66% | 89.86% | 79.19% | 63.93% | 38.85% |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **76.63%** | **60.30%** | **35.86%** | **18.57%** | **5.98%** | **0.53%** | **0.00%** |
+| Attack | Metric | K=0 (Clean) | K=1 | K=2 | K=4 | K=8 | K=16 | K=32 | K=64 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sigma-Zero** | Full-Set $RA$ | 94.84% | 84.26% | 73.46% | 54.49% | 27.44% | 4.70% | 0.06% | **0.00%** |
+| **SPGD** | Full-Set $RA$ | 94.84% | 82.08% | 66.32% | 38.40% | **12.04%** | **1.13%** | **0.00%** | **0.00%** |
+| **CASA (Proposed)** | **Full-Set $RA$** | **94.84%** | **76.08%** | **60.25%** | **36.04%** | 16.16% | 4.96% | 0.34% | 0.01% |
+| **Sigma-Zero** | Conditional $CRA$ | 100.00% | 88.84% | 77.46% | 57.45% | 28.94% | 4.96% | 0.06% | **0.00%** |
+| **SPGD** | Conditional $CRA$ | 100.00% | 86.55% | 69.93% | 40.49% | **12.70%** | **1.19%** | **0.00%** | **0.00%** |
+| **CASA (Proposed)** | **Conditional $CRA$** | **100.00%** | **80.22%** | **63.53%** | **38.00%** | 17.04% | 5.23% | 0.36% | 0.01% |
 
 ---
 
-### Table 4: Efficiency, Query Complexity & Runtime Comparison
+### Table 4: Computational Cost: Separating Black-box Queries vs. White-box Gradient Evaluations
 
-| Attack | Paradigm | Target Budget $K$ | Avg Queries / Image | Total Runtime (s) | Relative Speedup vs Blackbox |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **CornerSearch** | Blackbox Greedy | All $K$ | 68,943 | 17,337.0s (~4.8 h) | $1.0 \times$ (Baseline) |
-| **Sparse-RS** | Blackbox RS | All $K$ | 10,000 | 11,664.0s (~3.2 h) | $1.5 \times$ |
-| **GSE** | Whitebox Minimal | Minimal | 1,000 | 1,756.0s | $9.8 \times$ |
-| **PGD0** | Whitebox Budget | Fixed $K$ | 100 | 504.0s | $34.4 \times$ |
-| **SparseFool** | Whitebox Minimal | Minimal | ~20 | 468.0s | $37.0 \times$ |
-| **Sigma-Zero** | Whitebox Minimal | Minimal | ~500 | 282.0s | $61.5 \times$ |
-| **SPGD** | Whitebox SOTA | Fixed $K$ | 100 | 183.0s | $94.7 \times$ |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **$K=1$** | **21.9** | **279.4s** | **$62.0 \times$** |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **$K=4$** | **39.5** | **521.7s** | **$33.2 \times$** |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **$K=16$** | **44.8** | **391.4s** | **$44.3 \times$** |
-| **CASA (Ours SOTA)** | **Whitebox Coalition** | **$K=64$** | **15.2** | **80.5s** | **$215.3 \times$** |
+> *Rigorous Distinction: Black-box attacks perform zero-order queries ($f(x)$ evaluations without gradients). White-box attacks perform first-order evaluations (Forward passes $F$ and Backward gradient passes $B$, where $1B \approx 2F$ in FLOPs). Total equivalent forward passes $\approx F + 2B$.*
+
+| Attack | Paradigm | Target Budget $K$ | Black-box Queries | Whitebox Forwards ($F$) | Whitebox Backwards ($B$) | FLOP-Equivalent ($F+2B$) | Total Runtime (s) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **CornerSearch** | Blackbox Greedy | All $K$ (1k) | 68,943 | 0 | 0 | 68,943 | 17,337.0s (~4.8 h) |
+| **Sparse-RS** | Blackbox RS | All $K$ (1k) | 10,000 | 0 | 0 | 10,000 | 11,664.0s (~3.2 h) |
+| **GSE** | Whitebox Minimal | Minimal (1k) | 0 | ~1,000 | ~1,000 | ~3,000 | 1,756.0s |
+| **SparseFool** | Whitebox Minimal | Minimal (1k) | 0 | ~20 | ~20 | ~60 | 468.0s |
+| **Sigma-Zero** | Whitebox Minimal | Minimal (10k) | 0 | ~500 | ~500 | ~1,500 | 2,820.0s |
+| **SPGD** | Whitebox SOTA | Fixed $K$ (10k) | 0 | 100 | 100 | 300 | 1,830.0s |
+| **CASA (Proposed)** | **Whitebox Coalition** | **$K=1$ (10k)** | **0** | **22.3** | **7.6** | **37.5** | **935.2s** |
+| **CASA (Proposed)** | **Whitebox Coalition** | **$K=4$ (10k)** | **0** | **35.0** | **15.6** | **66.2** | **1,593.9s** |
+| **CASA (Proposed)** | **Whitebox Coalition** | **$K=16$ (10k)** | **0** | **28.4** | **12.7** | **53.8** | **1,309.4s** |
+| **CASA (Proposed)** | **Whitebox Coalition** | **$K=64$ (10k)** | **0** | **2.5** | **1.2** | **4.9** | **150.7s** |
 
 ---
 
@@ -140,13 +139,13 @@ Drop-and-Repair actively compresses active pixel perturbations while preserving 
 ## 3. Scientific Findings & Value for Publication
 
 1. **New Whitebox SOTA at Ultra-Sparse Regimes ($K \le 4$):**
-   - CASA dominates all prior whitebox attacks by substantial margins:
-     - At $K=1$: **$23.37\%$** vs SPGD $14.51\%$ (+8.86%), Sigma-Zero $12.91\%$ (+10.46%), PGD0 $2.88\%$ (+20.49%).
-     - At $K=2$: **$39.70\%$** vs SPGD $32.66\%$ (+7.04%), Sigma-Zero $25.93\%$ (+13.77%).
-     - At $K=4$: **$64.14\%$** vs SPGD $60.09\%$ (+4.05%), Sigma-Zero $44.72\%$ (+19.42%).
-   - At $K=64$: CASA achieves **$100.00\%$** complete evasion.
+   - On the full 10,000 CIFAR-10 test set, CASA establishes a new state of the art for ultra-sparse white-box adversarial attacks:
+     - At $K=1$: **$19.78\%$** vs SPGD $13.45\%$ (+6.33%) and Sigma-Zero $11.16\%$ (+8.62%).
+     - At $K=2$: **$36.47\%$** vs SPGD $30.07\%$ (+6.40%) and Sigma-Zero $22.54\%$ (+13.93%).
+     - At $K=4$: **$62.00\%$** vs SPGD $59.51\%$ (+2.49%) and Sigma-Zero $42.55\%$ (+19.45%).
+   - At higher budgets ($K \ge 8$), SPGD is slightly stronger due to running 100 continuous PGD steps, while CASA remains competitive ($82.96\%$ at $K=8$, $94.77\%$ at $K=16$) and converges to **$99.99\%$** at $K=64$ with significantly fewer gradient steps.
 
-2. **Decisive Strategic Advantages over Blackbox Attacks:**
-   - **Order-of-Magnitude Query Efficiency:** CASA requires only $\sim 22 - 60$ queries/image, whereas CornerSearch requires $68,943$ queries and Sparse-RS requires $10,000$ queries.
-   - **High-Budget Superiority ($K \ge 16$):** CornerSearch plateaus at $90.29\% - 92.64\%$. CASA reaches **$94.02\% - 100.00\%$**, proving that gradient-guided coalition updates scale where blackbox greedy search fails.
-   - **Differentiability for Defense:** CASA's whitebox nature makes it directly applicable to **Sparse Adversarial Training**, whereas blackbox methods are computationally prohibitive.
+2. **Efficiency & Differentiability Advantages:**
+   - **Order-of-Magnitude Speedup vs Blackbox:** CASA uses first-order gradients, requiring only $\sim 2.5 - 35$ model invocations per image, compared to $10,000$ queries for Sparse-RS and $68,943$ queries for CornerSearch.
+   - **Overcoming Blackbox Plateau:** Greedy blackbox methods like CornerSearch plateau at $90.29\% - 92.64\%$ even at $K=64$. In contrast, CASA reaches **$99.99\%$**, showing that gradient-guided support optimization scales effectively.
+   - **Direct Applicability to Defense:** Unlike combinatorial blackbox attacks that take hours per batch, CASA's efficiency allows it to serve as a strong, practical generator for **Sparse Adversarial Training (SAT)**.

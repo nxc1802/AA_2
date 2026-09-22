@@ -119,6 +119,46 @@ if [ "$STAGE" == "report" ] || [ "$STAGE" == "all" ]; then
         --output docs/official_paper_10k_results.md || true
 fi
 
+# ------------------------------------------------------------------------------
+# STAGE 6: Defense Benchmark (Obviation vs Preprocessing Defenses)
+# ------------------------------------------------------------------------------
+if [ "$STAGE" == "defense" ] || [ "$STAGE" == "all" ] || [ "$STAGE" == "extended" ]; then
+    echo ""
+    echo "--> [STAGE 6] Running Defense Robustness Benchmark (1,000 samples) ..."
+    python3 scripts/run_defense_benchmark.py \
+        --samples 1000 \
+        --batch-size 32 \
+        --k-values 4 16 \
+        --output result/defense_benchmark_results.json
+fi
+
+# ------------------------------------------------------------------------------
+# STAGE 7: Cross-Architecture Transferability Benchmark
+# ------------------------------------------------------------------------------
+if [ "$STAGE" == "transfer" ] || [ "$STAGE" == "all" ] || [ "$STAGE" == "extended" ]; then
+    echo ""
+    echo "--> [STAGE 7] Running Cross-Architecture Transferability Benchmark (1,000 samples) ..."
+    python3 scripts/run_transferability.py \
+        --samples 1000 \
+        --batch-size 32 \
+        --k-values 1 4 16 \
+        --output result/transferability_results.json
+fi
+
+# ------------------------------------------------------------------------------
+# STAGE 8: Hyperparameter Sensitivity & Extended Figures
+# ------------------------------------------------------------------------------
+if [ "$STAGE" == "sensitivity" ] || [ "$STAGE" == "all" ] || [ "$STAGE" == "extended" ]; then
+    echo ""
+    echo "--> [STAGE 8] Generating Figure 6 (Spatial Heatmap) & Figure 7 (Hyperparameter Sensitivity) ..."
+    python3 scripts/plot_perturbation_heatmaps.py \
+        --samples 5 \
+        --k 4 \
+        --output docs/assets/figure6_spatial_heatmap.png
+    python3 scripts/run_ablation_sensitivity.py \
+        --output-dir docs/assets
+fi
+
 echo ""
 echo "=============================================================================="
 echo " All requested stages completed successfully!"

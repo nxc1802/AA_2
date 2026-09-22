@@ -91,13 +91,14 @@ def main():
 
     generate_synthetic_or_cached_heatmaps(args.output_dir)
 
-    # Sync to docs/assets
+    # Sync to docs/assets if output_dir is different
     docs_assets = "docs/assets"
     if os.path.isdir(docs_assets):
         import shutil
         src = os.path.join(args.output_dir, "figure6_spatial_heatmap.png")
-        if os.path.isfile(src):
-            shutil.copy2(src, os.path.join(docs_assets, "figure6_spatial_heatmap.png"))
+        dest = os.path.join(docs_assets, "figure6_spatial_heatmap.png")
+        if os.path.isfile(src) and os.path.abspath(src) != os.path.abspath(dest):
+            shutil.copy2(src, dest)
             print(f"[Plot] Synced to {docs_assets}/figure6_spatial_heatmap.png")
 
 

@@ -152,9 +152,7 @@ if [ "$STAGE" == "sensitivity" ] || [ "$STAGE" == "all" ] || [ "$STAGE" == "exte
     echo ""
     echo "--> [STAGE 8] Generating Figure 6 (Spatial Heatmap) & Figure 7 (Hyperparameter Sensitivity) ..."
     python3 scripts/plot_perturbation_heatmaps.py \
-        --samples 5 \
-        --k 4 \
-        --output docs/assets/figure6_spatial_heatmap.png
+        --output-dir docs/assets
     python3 scripts/run_ablation_sensitivity.py \
         --output-dir docs/assets
 fi

@@ -95,12 +95,14 @@ def plot_sensitivity_figures(output_dir: str):
     plt.close(fig)
     print(f"[Plot] Saved Sensitivity Figure to {out_png}")
 
-    # Sync to docs/assets
+    # Sync to docs/assets if output_dir is different
     docs_assets = "docs/assets"
     if os.path.isdir(docs_assets):
         import shutil
-        shutil.copy2(out_png, os.path.join(docs_assets, "figure7_hyperparam_sensitivity.png"))
-        print(f"[Plot] Synced to {docs_assets}/figure7_hyperparam_sensitivity.png")
+        dest = os.path.join(docs_assets, "figure7_hyperparam_sensitivity.png")
+        if os.path.abspath(out_png) != os.path.abspath(dest):
+            shutil.copy2(out_png, dest)
+            print(f"[Plot] Synced to {docs_assets}/figure7_hyperparam_sensitivity.png")
 
 
 def main():

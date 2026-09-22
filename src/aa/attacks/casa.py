@@ -667,3 +667,8 @@ class CoalitionSparseAttack(Attack):
                 "flop_equivalent_evals": (forward_evals + 2 * backward_evals) * B,
             }
         )
+
+
+# Alias for research paper naming convention
+CASAAttack = CoalitionSparseAttack
+

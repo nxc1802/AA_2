@@ -1,0 +1,41 @@
+# configs/experiments/multi_model_benchmark.yaml
+# Multi-Architecture Benchmark across CNNs and Vision Transformers
+seed: 42
+strict: false  # Allow evaluation across non-ResNet18 models
+
+dataset:
+  name: cifar10
+  samples: 1000  # Multi-architecture scaling on 1,000 hold-out test samples
+  batch_size: 256
+
+models:
+  - name: resnet18
+    checkpoint: resnet18_cifar10_best.pth
+    architecture_type: standard_cnn
+  - name: wideresnet28_10
+    checkpoint: wideresnet28_10_cifar10_best.pth
+    architecture_type: wide_cnn
+  - name: resnet50
+    checkpoint: resnet50_cifar10_best.pth
+    architecture_type: deep_cnn
+  - name: mobilenet_v2
+    checkpoint: mobilenet_v2_cifar10_best.pth
+    architecture_type: lightweight_cnn
+  - name: vit_cifar
+    checkpoint: vit_cifar_cifar10_best.pth
+    architecture_type: vision_transformer
+
+benchmark:
+  k_values: [1, 2, 4, 8, 16]
+
+attacks:
+  - casa
+  - spgd
+  - sigma_zero
+  - sparse_rs
+
+attacks_batch_size:
+  casa: 16
+  spgd: 256
+  sigma_zero: 256
+  sparse_rs: 256

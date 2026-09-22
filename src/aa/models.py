@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights
+from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights, mobilenet_v2, MobileNet_V2_Weights
 from huggingface_hub import hf_hub_download
 from typing import Optional
 
@@ -19,6 +19,65 @@ def adapt_resnet_for_cifar(model: nn.Module, num_classes: int = 10) -> nn.Module
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
     return model
+
+
+def adapt_mobilenet_for_cifar(model: nn.Module, num_classes: int = 10) -> nn.Module:
+    """Adapts standard PyTorch MobileNetV2 for CIFAR (32x32 spatial input)."""
+    model.features[0][0] = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False)
+    if hasattr(model, "classifier") and len(model.classifier) > 1:
+        in_features = model.classifier[1].in_features
+        model.classifier[1] = nn.Linear(in_features, num_classes)
+    return model
+
+
+class ViTCIFAR(nn.Module):
+    """Compact Vision Transformer designed for CIFAR 32x32 resolution."""
+    def __init__(
+        self,
+        image_size: int = 32,
+        patch_size: int = 4,
+        num_classes: int = 10,
+        dim: int = 192,
+        depth: int = 6,
+        heads: int = 6,
+        mlp_dim: int = 384,
+        drop_rate: float = 0.0
+    ):
+        super().__init__()
+        assert image_size % patch_size == 0, "image_size must be divisible by patch_size"
+        num_patches = (image_size // patch_size) ** 2
+
+        self.to_patch_embedding = nn.Conv2d(3, dim, kernel_size=patch_size, stride=patch_size)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        self.dropout = nn.Dropout(drop_rate)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=dim,
+            nhead=heads,
+            dim_feedforward=mlp_dim,
+            dropout=drop_rate,
+            activation="gelu",
+            batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=depth)
+
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, num_classes)
+        )
+        self.architecture_name = "vit_cifar"
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B = x.shape[0]
+        tokens = self.to_patch_embedding(x).flatten(2).transpose(1, 2)
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, tokens), dim=1)
+        x = x + self.pos_embedding
+        x = self.dropout(x)
+        x = self.transformer(x)
+        cls_out = x[:, 0]
+        return self.mlp_head(cls_out)
 
 
 class BasicBlockWRN(nn.Module):
@@ -212,6 +271,15 @@ def get_model(
         model.architecture_name = "resnet50"
     elif name_clean in ["wideresnet28_10", "wideresnet", "wrn28_10"]:
         model = WideResNet28_10(depth=28, widen_factor=10, num_classes=num_classes)
+        model.architecture_name = "wideresnet28_10"
+    elif name_clean in ["mobilenet_v2", "mobilenetv2", "mobilenet"]:
+        weights = MobileNet_V2_Weights.DEFAULT if pretrained else None
+        model = mobilenet_v2(weights=weights)
+        model = adapt_mobilenet_for_cifar(model, num_classes=num_classes)
+        model.architecture_name = "mobilenet_v2"
+    elif name_clean in ["vit", "vit_cifar", "vit_tiny"]:
+        model = ViTCIFAR(num_classes=num_classes)
+        model.architecture_name = "vit_cifar"
     else:
         raise ValueError(f"Unsupported model architecture: {model_name}")
 

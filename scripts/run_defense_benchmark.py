@@ -104,7 +104,7 @@ def run_defense_evaluation(
 
                     # Generate attack
                     out = attack.attack(x_clean, y_clean)
-                    x_adv = out.adv_images
+                    x_adv = out.x_adv
 
                     # Evaluate through defense
                     with torch.no_grad():
@@ -163,9 +163,9 @@ def main():
 
     # Attacks to compare
     attacks = {
-        "CASA": lambda k, model: CASAAttack(model=model, k=k, steps=20, device=device),
-        "SPGD": lambda k, model: SparsePGD(model=model, k=k, steps=20, device=device),
-        "SigmaZero": lambda k, model: SigmaZero(model=model, max_k=k, steps=20, device=device),
+        "CASA": lambda k, model: CASAAttack(model=model, k=k, steps=20),
+        "SPGD": lambda k, model: SparsePGD(model=model, k=k, steps=20),
+        "SigmaZero": lambda k, model: SigmaZero(model=model, k=k, steps=20),
     }
 
     results = run_defense_evaluation(

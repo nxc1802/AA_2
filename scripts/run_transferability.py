@@ -74,7 +74,7 @@ def run_transfer_evaluation(
                     y_sub = y[mask]
 
                 out = attack.attack(x_sub, y_sub)
-                adv_samples.append(out.adv_images.detach().cpu())
+                adv_samples.append(out.x_adv.detach().cpu())
                 clean_labels.append(y_sub.detach().cpu())
                 clean_images.append(x_sub.detach().cpu())
 
@@ -160,8 +160,8 @@ def main():
     )
 
     attacks = {
-        "CASA": lambda k, model: CASAAttack(model=model, k=k, steps=20, device=device),
-        "SPGD": lambda k, model: SparsePGD(model=model, k=k, steps=20, device=device),
+        "CASA": lambda k, model: CASAAttack(model=model, k=k, steps=20),
+        "SPGD": lambda k, model: SparsePGD(model=model, k=k, steps=20),
     }
 
     results = run_transfer_evaluation(

@@ -1,9 +1,14 @@
 import argparse
 import os
+import sys
 import yaml
 import json
 import torch
 from typing import Optional, Dict, Any
+
+# Ensure src/ is importable without requiring editable pip install
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
 from aa.utils import set_seed, get_best_device, enable_gpu_optimizations, get_git_reproducibility_info
 from aa.data import get_sample_batch_indices
 from aa.models import get_model

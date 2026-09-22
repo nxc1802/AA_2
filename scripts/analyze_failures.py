@@ -1,9 +1,13 @@
 import argparse
 import os
+import sys
 import json
 import torch
 import torch.nn.functional as F
 from typing import Dict, Any, List
+
+# Ensure src/ is importable without requiring editable pip install
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from aa.utils import set_seed, get_best_device, enable_gpu_optimizations
 from aa.data import get_sample_batch_indices

@@ -52,12 +52,20 @@ def set_seed(seed: int = 42) -> None:
         torch.mps.manual_seed(seed)
 
 
-def enable_gpu_optimizations() -> None:
-    """Enables high-performance CUDA & cuDNN settings for fast GPU execution."""
+def enable_gpu_optimizations(deterministic: bool = False) -> None:
+    """Enables high-performance CUDA & cuDNN settings or strict deterministic mode."""
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
-        if hasattr(torch, "set_float32_matmul_precision"):
-            torch.set_float32_matmul_precision("high")
+        if deterministic:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+            try:
+                torch.use_deterministic_algorithms(True, warn_only=True)
+            except Exception:
+                pass
+        else:
+            torch.backends.cudnn.benchmark = True
+            if hasattr(torch, "set_float32_matmul_precision"):
+                torch.set_float32_matmul_precision("high")
 
 
 def prepare_model_for_eval(model: nn.Module, device: torch.device = None) -> nn.Module:

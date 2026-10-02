@@ -11,6 +11,31 @@ HF_REPO_ID = "Cuong2004/AA"
 HF_TOKEN = os.getenv("HF_TOKEN", None)
 
 
+DATASET_NORMALIZATION = {
+    "cifar10": ([0.4914, 0.4822, 0.4465], [0.2470, 0.2435, 0.2616]),
+    "cifar100": ([0.5071, 0.4867, 0.4408], [0.2675, 0.2565, 0.2761]),
+    "tiny_imagenet": ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+}
+
+
+class NormalizedModel(nn.Module):
+    """Encapsulates input normalization within the model graph as defined in docs/04_datasets.md."""
+    def __init__(self, backbone: nn.Module, mean: list, std: list):
+        super().__init__()
+        self.backbone = backbone
+        self.register_buffer("mean", torch.tensor(mean, dtype=torch.float32).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(std, dtype=torch.float32).view(1, 3, 1, 1))
+        self.architecture_name = getattr(backbone, "architecture_name", backbone.__class__.__name__)
+        if hasattr(backbone, "checkpoint_path"):
+            self.checkpoint_path = backbone.checkpoint_path
+        if hasattr(backbone, "checkpoint_sha256"):
+            self.checkpoint_sha256 = backbone.checkpoint_sha256
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_norm = (x - self.mean) / self.std
+        return self.backbone(x_norm)
+
+
 def adapt_resnet_for_cifar(model: nn.Module, num_classes: int = 10) -> nn.Module:
     """Adapts standard PyTorch ResNet for CIFAR (32x32 spatial input)."""
     model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -173,7 +198,8 @@ def find_existing_checkpoint(checkpoint_path_or_name: str = "resnet18_cifar10_be
                 if os.path.isfile(target_pth):
                     candidates.append(target_pth)
                 target_best = os.path.join(sub_path, "best.pth")
-                if os.path.isfile(target_best) and any(kw in sub for kw in [filename.replace(".pth", ""), "clean", "resnet18"]):
+                stem = filename.replace(".pth", "").replace("_best", "")
+                if os.path.isfile(target_best) and (stem in sub or sub in filename or sub.replace("_clean", "") in stem):
                     candidates.append(target_best)
 
     for cand in candidates:
@@ -242,7 +268,8 @@ def get_model(
     expected_sha256: Optional[str] = None,
     min_clean_acc: Optional[float] = None,
     validation_loader = None,
-    eval_mode: bool = True
+    eval_mode: bool = True,
+    normalize: bool = False
 ) -> nn.Module:
     """Instantiates neural network backbones and loads checkpoints strictly."""
     from aa.utils import compute_file_sha256
@@ -314,6 +341,10 @@ def get_model(
         model.train()
         for param in model.parameters():
             param.requires_grad_(True)
+
+    if normalize and dataset_name is not None and dataset_name.lower() in DATASET_NORMALIZATION:
+        mean, std = DATASET_NORMALIZATION[dataset_name.lower()]
+        model = NormalizedModel(model, mean, std)
 
     if min_clean_acc is not None and validation_loader is not None:
         acc = evaluate_accuracy(model, validation_loader, device=device)

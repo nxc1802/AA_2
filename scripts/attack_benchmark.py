@@ -60,10 +60,18 @@ def main():
         seed=seed
     )
 
+    expected_acc = model_cfg.get("expected_clean_acc", None) or cfg.get("expected_clean_acc", None)
+    min_clean_acc = (float(expected_acc) - 1.0) if (expected_acc is not None and strict_mode) else None
+
     model = get_model(
         model_name=model_cfg.get("name", "resnet18"),
+        dataset_name=ds_cfg.get("name", "cifar10"),
+        num_classes=model_cfg.get("num_classes", None),
         checkpoint_path=model_cfg.get("checkpoint", None),
         expected_sha256=model_cfg.get("expected_sha256", None),
+        strict_checkpoint=strict_mode,
+        min_clean_acc=min_clean_acc,
+        validation_loader=default_loader if min_clean_acc is not None else None,
         device=device
     )
 

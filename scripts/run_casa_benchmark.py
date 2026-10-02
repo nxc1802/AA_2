@@ -23,7 +23,10 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--model", type=str, default="resnet18", help="Model name (default: resnet18)")
     parser.add_argument("--checkpoint", type=str, default="result/saved_models/resnet18_cifar10_best.pth")
-    parser.add_argument("--k-values", nargs="+", type=int, default=[1, 2, 4, 8, 16, 32, 64], help="K budget values")
+    parser.add_argument("--expected-sha256", type=str, default="378eb005089d3942a3f237aeb08a927aa3dfbe41535c364891468b33c87d2172", help="Expected model checkpoint SHA256")
+    parser.add_argument("--strict", action="store_true", help="Fail-fast if checkpoint integrity fails")
+    parser.add_argument("--device", type=str, default=None, help="Device to run on (cuda, mps, cpu, or auto)")
+    parser.add_argument("--k-values", "--k", dest="k_values", nargs="+", type=int, default=[1, 2, 4, 8, 16, 32, 64], help="K budget values")
     parser.add_argument("--steps", type=int, default=20, help="Outer support exchange steps")
     parser.add_argument("--inner-steps", type=int, default=10, help="Inner RGB optimization steps")
     parser.add_argument("--repair-steps", type=int, default=4, help="Repair steps during swap")
@@ -43,7 +46,10 @@ def main():
     args = parse_args()
     enable_gpu_optimizations()
     set_seed(args.seed)
-    device = get_best_device()
+    if args.device and args.device != "auto":
+        device = torch.device(args.device)
+    else:
+        device = get_best_device()
 
     print("=" * 80)
     print(f"CASA BENCHMARK | Dataset: CIFAR-10 ({args.samples} samples, BS={args.batch_size})")
@@ -67,7 +73,8 @@ def main():
     model = get_model(
         model_name=args.model,
         checkpoint_path=args.checkpoint,
-        strict_checkpoint=False,
+        expected_sha256=args.expected_sha256 if args.strict else None,
+        strict_checkpoint=args.strict,
         device=device,
         eval_mode=True
     )

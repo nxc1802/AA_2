@@ -58,6 +58,8 @@ def evaluate_attack(
 
     total_forward = 0
     total_backward = 0
+    total_sample_forward = 0
+    total_sample_backward = 0
     total_queries = 0
     all_x_adv = []
 
@@ -78,6 +80,8 @@ def evaluate_attack(
                 queries=cached_output.queries,
                 forward_evals=cached_output.forward_evals,
                 backward_evals=cached_output.backward_evals,
+                sample_forward_evals=getattr(cached_output, "sample_forward_evals", 0),
+                sample_backward_evals=getattr(cached_output, "sample_backward_evals", 0),
                 metadata=cached_output.metadata
             )
             sample_offset += B
@@ -87,8 +91,19 @@ def evaluate_attack(
             synchronize_device(device)
             attack_gen_time += time.time() - t0_gen
 
-            total_forward += getattr(output, "forward_evals", 0)
-            total_backward += getattr(output, "backward_evals", 0)
+            fwd = getattr(output, "forward_evals", 0)
+            bwd = getattr(output, "backward_evals", 0)
+            sample_fwd = getattr(output, "sample_forward_evals", 0)
+            if sample_fwd == 0 and fwd > 0:
+                sample_fwd = fwd * B
+            sample_bwd = getattr(output, "sample_backward_evals", 0)
+            if sample_bwd == 0 and bwd > 0:
+                sample_bwd = bwd * B
+
+            total_forward += fwd
+            total_backward += bwd
+            total_sample_forward += sample_fwd
+            total_sample_backward += sample_bwd
             total_queries += getattr(output, "queries", 0)
             all_x_adv.append(output.x_adv.detach().cpu())
 
@@ -112,6 +127,8 @@ def evaluate_attack(
     if is_cache_hit:
         total_forward = cached_output.forward_evals
         total_backward = cached_output.backward_evals
+        total_sample_forward = getattr(cached_output, "sample_forward_evals", cached_output.forward_evals * (sample_offset or 1))
+        total_sample_backward = getattr(cached_output, "sample_backward_evals", cached_output.backward_evals * (sample_offset or 1))
         total_queries = cached_output.queries
         final_attack_gen_runtime = cached_output.metadata.get("attack_generation_runtime", 0.0)
     else:
@@ -128,7 +145,9 @@ def evaluate_attack(
                     x_adv=combined_x_adv,
                     queries=total_queries,
                     forward_evals=total_forward,
-                    backward_evals=total_backward
+                    backward_evals=total_backward,
+                    sample_forward_evals=total_sample_forward,
+                    sample_backward_evals=total_sample_backward
                 ),
                 attack_generation_runtime=final_attack_gen_runtime
             )
@@ -178,6 +197,10 @@ def evaluate_attack(
         "runtime_seconds": elapsed_time,
         "total_forward_evals": total_forward,
         "total_backward_evals": total_backward,
+        "sample_forward_evals": total_sample_forward,
+        "sample_backward_evals": total_sample_backward,
+        "flop_equivalent": total_sample_forward + 2 * total_sample_backward,
+        "flop_per_image": (total_sample_forward + 2 * total_sample_backward) / total_samples if total_samples > 0 else 0.0,
         "total_queries": total_queries,
         "queries_per_image": total_queries / total_samples if total_samples > 0 else 0.0,
         "raw_l0": l0_cat.tolist(),

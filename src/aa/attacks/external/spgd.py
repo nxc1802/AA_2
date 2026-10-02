@@ -62,11 +62,14 @@ class SparsePGD(Attack):
             res = official_attacker.perturb(x, y)
             adv_x = res[0] if isinstance(res, tuple) else res
 
+            B = x.size(0)
             return AttackOutput(
                 x_adv=adv_x,
                 forward_evals=self.steps,
                 backward_evals=self.steps,
-                queries=self.steps,
+                queries=0,
+                sample_forward_evals=self.steps * B,
+                sample_backward_evals=self.steps * B,
                 metadata={
                     "k": self.k,
                     "steps": self.steps,

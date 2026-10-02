@@ -57,3 +57,38 @@ def test_casa_gct_and_spatial_nms():
     l0_k2 = compute_spatial_l0(out_k2.x_adv - x)
     assert (l0_k2 <= 2).all()
 
+
+def test_casa_support_operations():
+    from aa.attacks.casa.support import Support
+
+    # Batch of 2, 4x4 image
+    indices = torch.tensor([[1, 5], [2, 10]])
+    supp = Support.from_indices(indices, B=2, H=4, W=4, max_k=2)
+
+    assert (supp.size() == 2).all()
+    assert supp.to_spatial_mask().shape == (2, 1, 4, 4)
+    assert supp.to_flat_mask().shape == (2, 16)
+
+    # Test get_indices
+    idx_list = supp.get_indices()
+    assert len(idx_list) == 2
+    assert torch.equal(idx_list[0], torch.tensor([1, 5]))
+    assert torch.equal(idx_list[1], torch.tensor([2, 10]))
+
+    # Test contains
+    assert (supp.contains(torch.tensor([1, 2])) == torch.tensor([True, True])).all()
+    assert (supp.contains(torch.tensor([0, 0])) == torch.tensor([False, False])).all()
+
+    # Test swap: remove index 1, add index 0 for sample 0; remove 10, add 15 for sample 1
+    new_supp = supp.swap(torch.tensor([1, 10]), torch.tensor([0, 15]))
+    assert (new_supp.size() == 2).all()
+    assert (new_supp.contains(torch.tensor([0, 15])) == torch.tensor([True, True])).all()
+    assert (new_supp.contains(torch.tensor([1, 10])) == torch.tensor([False, False])).all()
+
+    # Test add & remove
+    added = supp.add(torch.tensor([0, 15]))
+    assert (added.size() == 3).all()
+    removed = added.remove(torch.tensor([0, 15]))
+    assert (removed.size() == 2).all()
+
+

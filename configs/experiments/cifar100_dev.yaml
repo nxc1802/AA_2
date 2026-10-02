@@ -1,0 +1,50 @@
+# configs/experiments/cifar100_dev.yaml
+seed: 42
+strict: false
+
+dataset:
+  name: cifar100
+  samples: 100
+  batch_size: 100
+
+model:
+  name: resnet18
+  num_classes: 100
+  checkpoint: resnet18_cifar100_best.pth
+
+benchmark:
+  k_values: [1, 2, 4, 8, 16, 32, 64]
+
+attacks:
+  - fgsm
+  - pgd
+  - spgd
+  - casa
+
+attacks_batch_size:
+  fgsm: 100
+  pgd: 100
+  spgd: 100
+  casa: 16
+
+attacks_kwargs:
+  fgsm:
+    eps: 0.031372549
+  pgd:
+    eps: 0.031372549
+    alpha: 0.007843137
+    steps: 10
+  spgd:
+    steps: 20
+    alpha: 0.25
+  casa:
+    steps: 10
+    inner_steps: 4
+    alpha: 0.25
+    repair_steps: 2
+    loss_fn: dlr
+    drop_and_repair: true
+    enable_gct: true
+    spatial_nms: true
+    pair_exploration: true
+    adaptive_batch_swap: true

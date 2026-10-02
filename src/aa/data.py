@@ -24,6 +24,11 @@ DATASET_SPECS = {
         "image_size": 32,
         "channels": 3,
     },
+    "tiny_imagenet": {
+        "num_classes": 200,
+        "image_size": 64,
+        "channels": 3,
+    },
 }
 
 
@@ -40,6 +45,7 @@ class HFDatasetWrapper(Dataset):
     def __init__(self, hf_ds, transform=None):
         self.hf_ds = hf_ds
         self.transform = transform
+        self.label_key = "fine_label" if "fine_label" in getattr(hf_ds, "column_names", []) else "label"
 
     def __len__(self):
         return len(self.hf_ds)
@@ -48,16 +54,17 @@ class HFDatasetWrapper(Dataset):
         item = self.hf_ds[idx]
         raw_img = item.get("img", item.get("image"))
         img = raw_img.convert("RGB")
-        label = item["label"]
+        label = item.get(self.label_key, item.get("label", 0))
         if self.transform:
             img = self.transform(img)
         return img, label
 
 
-def get_dataset_transforms(is_train: bool = False):
+def get_dataset_transforms(is_train: bool = False, image_size: int = 32):
     if is_train:
+        padding = max(1, image_size // 8)
         return transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(image_size, padding=padding),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor()
         ])
@@ -103,15 +110,17 @@ def get_dataloaders(
     hf_train_full = load_dataset(HF_REPO_ID, name=ds_name, split="train", token=hf_token)
     hf_test = load_dataset(HF_REPO_ID, name=ds_name, split="test", token=hf_token)
 
+    label_key = "fine_label" if "fine_label" in getattr(hf_train_full, "column_names", []) else "label"
     all_indices = list(range(len(hf_train_full)))
-    all_labels = hf_train_full["label"]
+    all_labels = hf_train_full[label_key]
     train_idx, val_idx = train_test_split(
         all_indices, test_size=10000, random_state=seed, stratify=all_labels
     )
 
-    pt_train_full = HFDatasetWrapper(hf_train_full, transform=get_dataset_transforms(is_train=True))
-    pt_val_full = HFDatasetWrapper(hf_train_full, transform=get_dataset_transforms(is_train=False))
-    pt_test = HFDatasetWrapper(hf_test, transform=get_dataset_transforms(is_train=False))
+    image_size = spec.get("image_size", 32)
+    pt_train_full = HFDatasetWrapper(hf_train_full, transform=get_dataset_transforms(is_train=True, image_size=image_size))
+    pt_val_full = HFDatasetWrapper(hf_train_full, transform=get_dataset_transforms(is_train=False, image_size=image_size))
+    pt_test = HFDatasetWrapper(hf_test, transform=get_dataset_transforms(is_train=False, image_size=image_size))
 
     train_subset = Subset(pt_train_full, train_idx)
     val_subset = Subset(pt_val_full, val_idx)
@@ -156,11 +165,12 @@ def get_sample_batch_indices(
     hf_test = load_dataset(HF_REPO_ID, name=ds_name, split="test", token=hf_token)
     total_test = len(hf_test)
 
+    label_key = "fine_label" if "fine_label" in getattr(hf_test, "column_names", []) else "label"
     if num_samples >= total_test:
         selected_indices = list(range(total_test))
     else:
         all_indices = list(range(total_test))
-        all_labels = hf_test["label"]
+        all_labels = hf_test[label_key]
         _, selected_indices = train_test_split(
             all_indices,
             test_size=num_samples,

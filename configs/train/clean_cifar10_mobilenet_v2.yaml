@@ -1,0 +1,36 @@
+experiment:
+  name: cifar10_mobilenet_v2_clean
+  seed: 42
+
+dataset:
+  name: cifar10
+  num_workers: 4
+
+model:
+  name: mobilenet_v2
+  num_classes: 10
+
+training:
+  epochs: 10
+  train_batch_size: 256
+  eval_batch_size: 512
+  amp: true
+  grad_accum_steps: 1
+
+optimizer:
+  name: sgd
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  nesterov: false
+
+scheduler:
+  name: cosine
+  min_lr: 0.0
+
+checkpoint:
+  directory: result/checkpoints
+  monitor: val_accuracy
+  mode: max
+  save_last: true
+  save_best: true

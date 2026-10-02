@@ -35,8 +35,8 @@ def _worker_attack_shard(
         else:
             device = torch.device("cpu")
 
-        # Deterministic seed per worker
-        set_seed(seed + gpu_id)
+        # Deterministic seed invariant to physical GPU assignment
+        set_seed(seed)
 
         model = get_model(
             model_name=model_name,
@@ -70,15 +70,28 @@ def _worker_attack_shard(
         total_queries = 0
         total_fwd = 0
         total_bwd = 0
+        total_sample_fwd = 0
+        total_sample_bwd = 0
 
         t0 = time.time()
+        sample_cursor = 0
         for x, y in loader:
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+            current_bs = x.size(0)
+            if sample_cursor < len(sample_indices):
+                batch_anchor = sample_indices[sample_cursor]
+                set_seed(seed + (batch_anchor % 1000000))
+            sample_cursor += current_bs
+
             out: AttackOutput = attack.attack(x, y) if hasattr(attack, "attack") else attack(x, y)
             all_adv.append(out.x_adv.detach().cpu())
             total_queries += getattr(out, "queries", 0)
-            total_fwd += getattr(out, "forward_evals", 0)
-            total_bwd += getattr(out, "backward_evals", 0)
+            fwd = getattr(out, "forward_evals", 0)
+            bwd = getattr(out, "backward_evals", 0)
+            total_fwd += fwd
+            total_bwd += bwd
+            total_sample_fwd += getattr(out, "sample_forward_evals", fwd * current_bs)
+            total_sample_bwd += getattr(out, "sample_backward_evals", bwd * current_bs)
 
         elapsed = time.time() - t0
         x_adv_cat = torch.cat(all_adv, dim=0) if len(all_adv) > 0 else torch.empty(0)
@@ -87,6 +100,8 @@ def _worker_attack_shard(
             "queries": total_queries,
             "forward_evals": total_fwd,
             "backward_evals": total_bwd,
+            "sample_forward_evals": total_sample_fwd,
+            "sample_backward_evals": total_sample_bwd,
             "runtime": elapsed,
             "error": None
         }
@@ -180,6 +195,8 @@ class MultiGPUScheduler:
         total_queries = 0
         total_fwd = 0
         total_bwd = 0
+        total_sample_fwd = 0
+        total_sample_bwd = 0
 
         for rank in range(len(processes)):
             res = return_dict.get(rank)
@@ -190,6 +207,8 @@ class MultiGPUScheduler:
             total_queries += res["queries"]
             total_fwd += res["forward_evals"]
             total_bwd += res["backward_evals"]
+            total_sample_fwd += res.get("sample_forward_evals", 0)
+            total_sample_bwd += res.get("sample_backward_evals", 0)
 
         x_adv_combined = torch.cat(all_x_adv, dim=0)
         return AttackOutput(
@@ -197,5 +216,7 @@ class MultiGPUScheduler:
             queries=total_queries,
             forward_evals=total_fwd,
             backward_evals=total_bwd,
+            sample_forward_evals=total_sample_fwd,
+            sample_backward_evals=total_sample_bwd,
             metadata={"attack_generation_runtime": t_total_gen}
         )
